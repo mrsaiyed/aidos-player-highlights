@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.game import Game
@@ -13,6 +13,7 @@ from app.schemas.moment import (
 from app.services.nba_service import NBAService
 from app.services.moment_service import MomentService
 from app.services.timeline_service import TimelineService
+from app.services.event_resolver_service import EventResolverService
 from app.utils.auth import get_current_user
 
 router = APIRouter()
@@ -94,3 +95,54 @@ def map_timeline(
     ]
 
     return MapTimelineResponse(count=len(mapped_moments), sample=sample)
+
+
+@router.post("/games/{game_id}/resolve-moments")
+def resolve_moments(
+    game_id: int,
+    background_tasks: BackgroundTasks,
+    profile: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Resolve moment timestamps using clock OCR pipeline (Phase 6).
+
+    This replaces the slow watch-based refinement. Runs in a background task
+    because the OCR pass over a full game takes a few minutes.
+    """
+    game = db.query(Game).filter(Game.id == game_id, Game.user_id == user.id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    moments = db.query(Moment).filter(Moment.game_id == game_id).all()
+    if not moments:
+        raise HTTPException(status_code=400, detail="No moments found. Run fetch-moments first.")
+
+    game.status = "resolving"
+    db.commit()
+
+    resolver = EventResolverService(profile_name=profile)
+
+    def _run_resolve():
+        from app.db.database import SessionLocal
+        task_db = SessionLocal()
+        try:
+            task_moments = task_db.query(Moment).filter(Moment.game_id == game_id).all()
+            result = resolver.resolve_moments(game_id, game.nba_game_id, task_moments, task_db)
+            task_game = task_db.query(Game).filter(Game.id == game_id).first()
+            if task_game:
+                task_game.status = "resolved"
+                task_db.commit()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error("resolve_moments failed: %s", exc)
+            task_game = task_db.query(Game).filter(Game.id == game_id).first()
+            if task_game:
+                task_game.status = "resolve_failed"
+                task_db.commit()
+        finally:
+            task_db.close()
+
+    background_tasks.add_task(_run_resolve)
+
+    return {"status": "started", "moment_count": len(moments)}

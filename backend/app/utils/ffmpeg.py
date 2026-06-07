@@ -49,11 +49,12 @@ def cut_clip(
 ) -> bool:
     """Cut a clip from input_path between start and end seconds."""
     ffmpeg = _resolve_tool("ffmpeg") or "ffmpeg"
+    duration = end_seconds - start_seconds
     cmd = [
         ffmpeg,
-        "-i", input_path,
         "-ss", str(start_seconds),
-        "-to", str(end_seconds),
+        "-i", input_path,
+        "-t", str(duration),
         "-c:v", "libx264",
         "-c:a", "aac",
         "-avoid_negative_ts", "make_zero",

@@ -7,7 +7,8 @@ self-correcting anchor chain that uses NBA API score signatures and the claude-v
 watch skill to pin each play to the exact video second.
 
 ## Status
-Steps 1–4 complete. Step 5 (end-to-end validation) in progress.
+Completed as a baseline implementation using claude-video watch anchor chaining.
+This phase validated feasibility, but not MVP-level speed.
 
 **Q1 agent-driven run complete (June 7, 2026):**
 All 7 LAL scoring plays in Q1 confirmed via visual frame analysis using watch.py + NBA API score context.
@@ -111,8 +112,13 @@ No manual Q2/Q3/Q4 start timestamps needed.
 - [x] TASK 27: Run generate-clips (all 7 Q1 LAL plays, 8s clips, 7s pre-roll + 1s post-roll)
 - [x] TASK 28: Verify 7 clip files exist across 5 player folders
 - [x] TASK 29: Spot-checked Drummond (dunk), KCP (3PT), Caruso (#4 celebrating) — correct play content
-- [ ] TASK 30: Repeat TASK 24–29 for Q2, Q3, Q4
-- [ ] TASK 31: Update documentation — complete
+- [x] TASK 30: Repeat TASK 24–29 for Q2, Q3, Q4
+- [x] TASK 31: Update documentation
+
+### Step 6: MVP architecture handoff (new)
+- [x] TASK 32: Mark watch anchor chain as baseline/fallback path
+- [x] TASK 33: Define next phase to build deterministic scorebug scanner prototype
+- [x] TASK 34: Record that OCR/template scanner is not implemented yet
 
 ## Acceptance Criteria
 - score_before and score_after populated on all LAL made_shot moments
@@ -123,6 +129,11 @@ No manual Q2/Q3/Q4 start timestamps needed.
 - Q1 hard cap removed — clips generated for all 4 quarters
 - All Lakers scorers (LeBron, Davis, KCP, Caruso, Kuzma, Schröder, Harrell, THT, Drummond) have clip folders
 - All existing pytest tests still pass
+
+### Exit Criteria for this phase (added)
+- Baseline full-game run is complete and documented.
+- Known performance limit is documented (~1h15 operational run).
+- Follow-on work is redirected to deterministic scorebug scanning (Phase 5B/5C). See [phase-5b-hsv-mask-fix.md](phase-5b-hsv-mask-fix.md) for the HSV white-mask digit reader fix.
 
 ## Algorithm: Sequential Anchor Chain
 
@@ -252,3 +263,4 @@ score) makes false positives essentially impossible within a 60-90 second window
 - refinement_method stored on Moment: "watch_confirmed" | "interpolated" | "formula"
 - Automated sync method: watch.py runs as subprocess for each play in the anchor chain. Identical to the proven 3-clip manual test. NBA API score context passed as prompt. FOUND: <seconds> parsed from output. No separate frame reader needed. No OCR. No Vision API called directly. Proven approach only.
 - score_before/score_after stored as String on Moment (e.g. "LAL 4 GSW 15")
+- Follow-up decision (June 2026): this method remains as fallback/validation. Primary MVP timestamping will move to deterministic scorebug scanning (OCR/template) once implemented.

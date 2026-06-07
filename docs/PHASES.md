@@ -7,10 +7,11 @@
 | 2 | NBA Data + Moments | Complete |
 | 3 | Timeline Mapping | Complete |
 | 4 | FFmpeg Clip Cutting | Complete |
-| 5 | Player Video Rendering | In Progress |
-| 5A | Full Game Pipeline — Self-Correcting Timestamp Refinement | In Progress — Q1 complete |
-| 5B | Q2–Q4 Pipeline Extension | Not Started |
-| 6 | Pipeline Endpoint + Background Task | Not Started |
-| 7 | Hackathon MVP Frontend | Not Started |
-| 8 | Auto Quarter Detection | Superseded by Phase 5A anchor chain |
+| 5 | Timestamping + Clip Pipeline | In Progress |
+| 5A | Claude-video Anchor Chain Baseline | Complete (full-game run validated, but too slow for MVP UX) |
+| 5B | Deterministic Scorebug Scanner Prototype (OCR/template) | In Progress — see [phase-5b-hsv-mask-fix.md](phases/phase-5b-hsv-mask-fix.md) |
+| 5C | Event Mapping + Confidence + Claude Fallback | In Progress |
+| 6 | Unified Pipeline Endpoint + Status Model | Planned |
+| 7 | Hackathon MVP Frontend (Rapid Review) | Planned |
+| 8 | Auto Quarter Detection | Deferred (revisit after scorebug scanner) |
 | 9 | Demo Polish | Not Started |

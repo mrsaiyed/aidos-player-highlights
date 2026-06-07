@@ -32,6 +32,19 @@ def get_approved_dir(game_id: str) -> str:
     os.makedirs(path, exist_ok=True)
     return path
 
+
+def get_scan_dir(game_id: str) -> str:
+    path = os.path.join(get_game_output_dir(game_id), "scan")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def get_digit_templates_dir(game_id: str, profile_name: str) -> str:
+    path = os.path.join(get_scan_dir(game_id), "digit_templates", profile_name)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 def sanitize_player_name(name: str) -> str:
     """Convert player name to safe folder/filename format."""
     import re

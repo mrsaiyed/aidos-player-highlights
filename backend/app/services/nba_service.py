@@ -20,9 +20,9 @@ EVENT_TYPE_MAP = {
 class NBAService:
     def fetch_play_by_play(self, nba_game_id: str) -> list[dict]:
         try:
-            from nba_api.stats.endpoints import playbyplayv2
+            from nba_api.stats.endpoints import playbyplayv3
 
-            pbp = playbyplayv2.PlayByPlayV2(game_id=nba_game_id)
+            pbp = playbyplayv3.PlayByPlayV3(game_id=nba_game_id)
             df = pbp.get_data_frames()[0]
             raw_events = df.to_dict(orient="records")
         except Exception:

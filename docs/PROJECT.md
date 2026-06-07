@@ -89,9 +89,9 @@ Architecture already supports them — just needs frontend filters and multi-gam
 - AI coding: opencode + DeepSeek V4 Pro
 
 ## Current Phase
-Phase 5B: Q2–Q4 Pipeline Extension
-Note: Phase 5A Q1 agent-driven run complete June 7 2026. Q2–Q4 runs are next, followed by Phase 6 (pipeline endpoint) and Phase 7 (hackathon MVP frontend).
-Phase 1 auth built but confirmation deferred to Phase 7.
+Phase 5B/5C planning: deterministic scorebug scanner + event mapping
+Note: Phase 5A baseline full-game run is complete, but current claude-video-per-play refinement is too slow for MVP rapid review. Next steps are scanner prototype, confidence mapping, and fallback-only use of watch.py.
+Phase 1 auth is built; MVP demo auth strategy still needs a final decision.
 
 ## What Is Working
 - FastAPI backend serving on port 8000
@@ -108,15 +108,15 @@ Phase 1 auth built but confirmation deferred to Phase 7.
 - RefinementService built with sequential anchor chain logic
 - POST /api/games/{id}/refine-moments endpoint (BackgroundTask)
 - Q1 hard cap removed — clips now generated for all 4 quarters
-- **3-clip watch test complete (June 2026):** confirmed exact video timestamps for 3 Q1 Lakers plays:
-  - Drummond dunk → 82s, KCP 3PT → 442s, Davis floater → 1177s
-- **Q1 agent-driven run complete (June 7, 2026):** all 7 LAL scoring plays confirmed via watch.py frame analysis:
-  - Drummond (82s), LeBron (258s), KCP ×2 (442s, 687s), Caruso ×2 (752s, 947s), AD (1176s)
-  - 7 clips generated across 5 player folders; each exactly 8s, correctly centered on the score change
-  - Self-correcting anchor chain validated: zero NOT_FOUND across all 7 plays; max drift 4s from anchor
+- Baseline full-game run completed for LAL scoring plays (37 clips generated)
+- claude-video watch + anchor chain approach validated for correctness, but currently too slow for MVP UX
 
 ## What Is Blocked
-- Nothing yet
+- Scorebug scanner prototype exists but needs validation on game 0052000121 after HSV white-mask fix — see [phase-5b-hsv-mask-fix.md](phases/phase-5b-hsv-mask-fix.md)
+- API/UX alignment gaps remain for MVP:
+  - Team/both-team selection support end-to-end
+  - Player/team filtering behavior on list endpoints
+  - Unified process endpoint and status model
 
 ## Key Decisions Made
 - Manual quarter timestamps for MVP, auto-detection added later
@@ -127,7 +127,7 @@ Phase 1 auth built but confirmation deferred to Phase 7.
 - constants.py is the single source of truth for all pipeline numbers. If a number appears in more than one place it belongs in constants.py instead.
 - conftest.py mock_events is the canonical test dataset. Any new test that needs play-by-play events uses this fixture.
 - Timeline formula: elapsed = QUARTER_DURATION_SECONDS - clock_remaining, video_time = quarter_start + elapsed. Manual quarter timestamps for MVP; auto-detection in Phase 8.
-- MAX_CLIPS_PER_PLAYER = 5 limits clips per player for fast demo; top moments selected by importance_score descending.
+- MAX_CLIPS_PER_PLAYER = 20 for current full-game reels.
 - Switched from mock play-by-play to real NBA API data. Real Q1 data confirmed: 17 total events, 6 Lakers buckets. Real API uses PT format for clock — normalized in nba_service. real_play_by_play.json saved for offline/demo fallback.
 - Two processing modes: buckets = all made shots, no filtering by type; highlights = dunks, threes, blocks, steals, clutch only. MVP uses buckets mode for all clip generation.
 - **3-clip watch test (June 2026):** formula-only timeline unusable beyond early Q1 due to dead-ball drift. Confirmed that NBA API score_before/score_after + claude-video watch scan reliably finds exact video second within ±5s.
@@ -135,6 +135,7 @@ Phase 1 auth built but confirmation deferred to Phase 7.
 - CLIP_PRE_ROLL_SECONDS = 7, CLIP_POST_ROLL_SECONDS = 1, CLIP_TOTAL_SECONDS = 8 (calibrated June 7 2026 from Q1 agent run — shot scores at exactly second 7 of the 8s clip, crowd reaction visible in post-roll second).
 - score_before and score_after will be stored as strings on Moment model (e.g. "LAL 4 GSW 15") and sourced from scoreHome/scoreAway fields already present in the raw NBA API response.
 - refinement_method stored on each Moment: "watch_confirmed" | "interpolated" | "formula" to track data quality.
+- MVP speed decision (June 2026): move primary timestamping to deterministic scorebug scanning (OCR/template) once implemented; keep claude-video watch for fallback/validation of ambiguous timestamps.
 
 ## Documentation Rules
 These docs are updated after every phase and every key decision.

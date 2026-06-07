@@ -1,16 +1,23 @@
 # Architecture
 
 ## Pipeline Flow
-User uploads video + enters NBA game ID + selects team + selects players
+### Current Implemented Flow (as of June 2026)
+User uploads video + enters NBA game ID
 → backend fetches NBA play-by-play via nba_api
 → moment service extracts made shots; stores score_before/score_after
 → refinement service runs sequential anchor chain:
-    for each scoring play: watch.py scans narrow video window → agent reads frames → score change confirmed → timestamp stored
-→ FFmpeg cuts 8s clips per confirmed moment (7s pre-roll, 1s post-roll)
+    for each scoring play: watch.py scans a window, then returns FOUND/NOT_FOUND
+→ FFmpeg cuts fixed-window clips around stored timestamps
 → clips grouped by player in output folders
-→ frontend shows clips per player for review
-→ (post-MVP) FFmpeg renders one compiled video per player
-→ (post-MVP) user approves or rejects compiled video
+
+### Target MVP Flow (planned, not implemented yet)
+User uploads video + enters NBA game ID + selects one team or both + selects players/all scorers
+→ backend fetches NBA play-by-play and builds expected scoring events in game order
+→ scorebug scanner pass (OCR/template matching) runs once over the game to build score/clock timeline
+→ mapper aligns NBA scoring events to observed score changes, writing timestamp + confidence
+→ only low-confidence events are sent to claude-video watch fallback
+→ frontend opens rapid review on timestamped segments first
+→ FFmpeg rendering/export runs after review (or on-demand)
 
 ## Pipeline Services
 
@@ -18,9 +25,17 @@ User uploads video + enters NBA game ID + selects team + selects players
 |---------|------|----------------|
 | NBAService | `nba_service.py` | Fetch play-by-play from nba_api with mock JSON fallback; populate score_before/score_after |
 | MomentService | `moment_service.py` | Filter highlight-worthy events and assign importance scores |
-| TimelineService | `timeline_service.py` | Convert period + game clock to video timestamp (formula — MVP fallback only; drifts beyond early Q1) |
-| RefinementService | `refinement_service.py` | Sequential anchor chain: watch.py scan per play → frame analysis → confirmed video_time_seconds |
-| ClipService | `clip_service.py` | Select top moments per player and cut FFmpeg clips around each highlight |
+| TimelineService | `timeline_service.py` | Legacy formula mapper (kept as fallback only; drifts in full games) |
+| RefinementService | `refinement_service.py` | Current baseline: sequential watch.py anchor-chain timestamping |
+| ScoreboardScanService | `scoreboard_scan_service.py` | Deterministic scorebug scan (template/OCR), one pass per game — see [phase-5b-hsv-mask-fix.md](phases/phase-5b-hsv-mask-fix.md) |
+| EventAlignmentService | `TBD` | Planned: map NBA score transitions to video timeline + confidence labels |
+| ClipService | `clip_service.py` | Cut clips around timestamps; move to post-review export path for MVP speed |
+
+### Role of Claude-video Watch
+
+- Keep `watch.py` as fallback for ambiguous/low-confidence mappings.
+- Use it for calibration/debug, not for every scoring play.
+- This reduces end-to-end latency and keeps AI in the loop only when deterministic parsing is uncertain.
 
 ### FFmpeg Utility (`ffmpeg.py`)
 
