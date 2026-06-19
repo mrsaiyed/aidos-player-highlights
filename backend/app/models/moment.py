@@ -21,4 +21,6 @@ class Moment(Base):
     importance_score = Column(Integer, default=0)
     status = Column(String, default="pending")
     refinement_method = Column(String, nullable=True)
+    confidence = Column(String, nullable=True)  # "high" | "low" from the flip detector
+    transition_lead_seconds = Column(Float, nullable=True)  # extra pre-roll for steal/transition plays
     created_at = Column(DateTime, default=func.now())

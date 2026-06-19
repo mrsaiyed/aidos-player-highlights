@@ -53,6 +53,57 @@ MVP scope: one game, one team, buckets only.
 All other reel types and time periods are post-MVP.
 Architecture already supports them — just needs frontend filters and multi-game processing.
 
+## How It Works
+
+### In plain English (no tech knowledge needed)
+
+You give it a full-game video and the game's ID. It gives back a folder of short highlight
+clips for each player — every basket they made — and stitches them into one reel per player.
+
+The hard part it solves: the video has no chapter markers, and the game clock doesn't match
+the video time (the video includes timeouts, free throws, and commercials — dead time the game
+clock ignores). So it does what a person would. It pulls the official NBA play-by-play (the
+"answer key": who scored and the running score, in order), then watches the scoreboard in the
+corner of the video. For each basket it waits for the score to tick up, reads the new number,
+and checks it against the answer key. When the number matches, that's the exact moment of the
+basket. It snips 5 seconds before the ball goes in and 3 after, files it under the player's
+name, and moves on — picking up where it left off so it never re-watches the whole game. At the
+end, each player's clips are joined into one reel.
+
+### Technically
+
+**What runs it:** a Python backend (FastAPI app + standalone scripts), Python 3.12, deps managed
+by `uv` in a virtualenv (`backend/.venv`). It leans on a few engines:
+- **FFmpeg / ffprobe** — extracts frames and cuts/joins clips (the video workhorse).
+- **OpenCV (cv2)** — crops the scoreboard area and compares frames (white-digit masking) to spot a score change.
+- **EasyOCR (PyTorch under the hood)** — reads the actual score/clock digits from the crop.
+- **nba_api** — pulls the official play-by-play from the NBA stats API.
+- **SQLAlchemy + SQLite** — stores games, plays (moments), and clips.
+
+**The pipeline, file by file** (`backend/app/`):
+1. `services/nba_service.py` — fetches play-by-play (`playbyplayv3`); builds each play's score-before/score-after (the *signature*).
+2. `services/moment_service.py` — filters to the plays you want (e.g. all made shots); one `Moment` per basket.
+3. `services/score_change_detector.py` — the core. Scans video frames forward; OpenCV finds candidate score changes; EasyOCR confirms the new value matches the expected score. Returns the exact video second.
+4. `services/refinement_service.py` — the "anchor chain": walks every play in game order, calling the detector forward from the last confirmed play; records timestamp + confidence; self-heals on a miss.
+5. `services/clip_service.py` — turns a confirmed second into clip bounds (net = flip − 3s; 5s before, 3s after) and calls FFmpeg.
+6. `services/render_service.py` — joins each player's clips into one reel.
+7. `utils/scorebug_regions.py` (clock/score box pixel coordinates per broadcast), `utils/constants.py` (tunable numbers), `utils/ffmpeg.py` + `utils/paths.py` (FFmpeg wrappers, file locations).
+8. `api/clips.py` — `POST /process` (runs the whole pipeline as a background task) and `GET /status`.
+
+**A successful run:**
+1. Input: full-game MP4 + NBA game ID.
+2. Fetch play-by-play → ordered baskets with score signatures.
+3. Filter to the target team/players' made shots.
+4. For each basket in order: scan forward from the last confirmed basket; OpenCV spots the score-box change; EasyOCR confirms it changed to the expected score → that frame is the basket's real video time. Confirmed timestamps re-anchor the search, so it stays fast and drift never accumulates.
+5. Cut an 8-second clip around each confirmed time with FFmpeg; file per player.
+6. Join each player's clips into a reel.
+7. Output: per-player highlight reels. On the validated game (ESPN Play-In, `0052000121`) this confirmed **37/37** baskets and cut correctly-timed clips.
+
+**Important caveat:** the scoreboard locations and digit colors in `scorebug_regions.py` are
+calibrated to **one** broadcast (the ESPN Play-In game). A different broadcast needs the
+scoreboard re-located first — that's the next piece of work (auto-calibration using the NBA API
+score sequence as a reference to find the clock/score boxes on any video).
+
 **Hackathon MVP Frontend (Phase 7):**
 - Upload full game video + enter NBA game ID
 - Choose team (LAL or GSW from the upload)
@@ -89,8 +140,12 @@ Architecture already supports them — just needs frontend filters and multi-gam
 - AI coding: opencode + DeepSeek V4 Pro
 
 ## Current Phase
-Phase 5B/5C planning: deterministic scorebug scanner + event mapping
-Note: Phase 5A baseline full-game run is complete, but current claude-video-per-play refinement is too slow for MVP rapid review. Next steps are scanner prototype, confidence mapping, and fallback-only use of watch.py.
+Phase 6 (revised): Fast Anchor Chain — see [phases/phase-6-revised-plan.md](phases/phase-6-revised-plan.md).
+Keep the proven 5A anchor chain (validated ~92% timestamping, see [phases/first_run.md](phases/first_run.md))
+but swap the per-play claude-video confirmation for the deterministic score-flip detector
+(`score_change_detector.py`), demote `watch.py` to flagged-only fallback, and add dynamic
+play-aware clip windows. Phase 5B (scorebug OCR/template) is abandoned; Phase 5C clock-OCR is
+parked as redundant for scoring plays (kept for non-scoring events post-MVP).
 Phase 1 auth is built; MVP demo auth strategy still needs a final decision.
 
 ## What Is Working
@@ -132,7 +187,7 @@ Phase 1 auth is built; MVP demo auth strategy still needs a final decision.
 - Two processing modes: buckets = all made shots, no filtering by type; highlights = dunks, threes, blocks, steals, clutch only. MVP uses buckets mode for all clip generation.
 - **3-clip watch test (June 2026):** formula-only timeline unusable beyond early Q1 due to dead-ball drift. Confirmed that NBA API score_before/score_after + claude-video watch scan reliably finds exact video second within ±5s.
 - **Self-correcting anchor chain (Phase 5A decision):** each confirmed video timestamp becomes the new search anchor for the next play. No manual Q2/Q3/Q4 timestamps needed. Q1 hard cap removed. Phase 8 auto quarter detection superseded by this approach.
-- CLIP_PRE_ROLL_SECONDS = 7, CLIP_POST_ROLL_SECONDS = 1, CLIP_TOTAL_SECONDS = 8 (calibrated June 7 2026 from Q1 agent run — shot scores at exactly second 7 of the 8s clip, crowd reaction visible in post-roll second).
+- CLIP_PRE_ROLL_SECONDS = 7, CLIP_POST_ROLL_SECONDS = 1, CLIP_TOTAL_SECONDS = 8 (calibrated June 7 2026 from Q1 agent run — shot scores at exactly second 7 of the 8s clip, crowd reaction visible in post-roll second). **Superseded by Phase 6 revised:** the fixed window mis-fit 8/37 clips in the full-game review, so windowing moves to dynamic, play-aware bounds anchored on the score flip (`[flip − 6s, flip + 2s]` default; extra lead for transition/steal plays). See [phases/phase-6-revised-plan.md](phases/phase-6-revised-plan.md).
 - score_before and score_after will be stored as strings on Moment model (e.g. "LAL 4 GSW 15") and sourced from scoreHome/scoreAway fields already present in the raw NBA API response.
 - refinement_method stored on each Moment: "watch_confirmed" | "interpolated" | "formula" to track data quality.
 - MVP speed decision (June 2026): move primary timestamping to deterministic scorebug scanning (OCR/template) once implemented; keep claude-video watch for fallback/validation of ambiguous timestamps.

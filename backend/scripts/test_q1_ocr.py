@@ -1,8 +1,7 @@
 """Q1 Hybrid Pipeline Test
 
-OCR pass builds clock table, resolves all events. HIGH confidence events
-get a +3s offset and clip directly. MEDIUM/LOW confidence events go through
-Claude Watch for precise timestamp verification on a tight ~15s window.
+OCR pass builds clock table, resolves all events. Then score change detection
+verifies the exact frame where the scorebug score updates for each event.
 
 Usage:
     python scripts/test_q1_ocr.py
@@ -14,7 +13,6 @@ import re
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -23,12 +21,12 @@ import easyocr
 
 from app.services.nba_service import NBAService
 from app.services.clock_ocr_service import ClockOCRService, ClockReading, ClockTable
+from app.services.score_change_detector import verify_score_change
 from app.utils.scorebug_regions import get_profile
 from app.utils.ffmpeg import cut_clip, get_video_duration
 from app.utils.constants import (
     CLIP_PRE_ROLL_SECONDS,
     CLIP_POST_ROLL_SECONDS,
-    OCR_HIGH_CONFIDENCE_OFFSET,
 )
 
 CLIPS_OUT_DIR = os.path.abspath(os.path.join(
@@ -151,113 +149,54 @@ def resolve_events(events, table):
     return results
 
 
-def run_watch_verify(video_path, result):
-    """Use Claude Watch to find exact score-change timestamp in a tight window."""
-    watch_script = Path.home() / ".claude" / "skills" / "watch" / "scripts" / "watch.py"
-    if not watch_script.exists():
-        print(f"  Watch script not found at {watch_script}")
-        return None
-
-    # Tight window: 10s before OCR estimate to 8s after
-    center = result["video_sec"]
-    start_s = max(0, int(center - 10))
-    end_s = int(center + 8)
-    start_mmss = f"{start_s // 60}:{start_s % 60:02d}"
-    end_mmss = f"{end_s // 60}:{end_s % 60:02d}"
-
-    prompt = (
-        f"Q{result['period']} {result['clock']} remaining. "
-        f"{result['player']} {result['subtype']}. "
-        f"Score before: {result['score_before']}. "
-        f"Score after: {result['score_after']}. "
-        f"Find when score changes from {result['score_before']} "
-        f"to {result['score_after']}. "
-        f"Reply ONLY: FOUND: <seconds> or NOT_FOUND"
-    )
-
-    try:
-        proc = subprocess.run(
-            [
-                "python", str(watch_script),
-                video_path,
-                "--start", start_mmss,
-                "--end", end_mmss,
-                "--no-whisper",
-                "--fps", "2",
-                "--resolution", "1024",
-                "--max-frames", "60",
-                "--question", prompt,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-    except subprocess.TimeoutExpired:
-        print(f"  Watch timed out for [{start_mmss}, {end_mmss}]")
-        return None
-    except Exception as exc:
-        print(f"  Watch error: {exc}")
-        return None
-
-    output = proc.stdout + proc.stderr
-    match = re.search(r"FOUND:\s*(\d+(?:\.\d+)?)", output, re.IGNORECASE)
-    if match:
-        return float(match.group(1))
-    return None
-
-
-def apply_hybrid_resolution(results, video_path):
-    """Apply +3s offset to HIGH confidence, Claude Watch to MEDIUM/LOW."""
-    print("\n--- Hybrid Resolution ---")
+def verify_all_events(results, video_path):
+    """Run score change detection on all events."""
+    print("\n--- Score Change Verification ---")
 
     for r in results:
         if r["video_sec"] is None:
             continue
 
-        if r["confidence"] == "HIGH":
-            r["video_sec"] += OCR_HIGH_CONFIDENCE_OFFSET
-            r["method"] = "ocr+offset"
-            print(f"  {r['player']:20s} {r['clock']}  HIGH  -> +{OCR_HIGH_CONFIDENCE_OFFSET}s offset -> {r['video_sec']:.1f}s")
+        print(f"  {r['player']:20s} {r['clock']}  {r['confidence']:<6s}  "
+              f"OCR={r['video_sec']:.1f}s  ", end="", flush=True)
+
+        vr = verify_score_change(
+            video_path,
+            r["video_sec"],
+            r["score_before"],
+            r["score_after"],
+            profile_name="espn",
+        )
+
+        if vr.verified:
+            delta = vr.video_second - r["video_sec"]
+            r["video_sec"] = vr.video_second
+            r["confidence"] = "VERIFIED"
+            r["method"] = "score_change"
+            print(f"-> VERIFIED at {vr.video_second:.1f}s (delta={delta:+.1f}s)")
         else:
-            print(f"  {r['player']:20s} {r['clock']}  {r['confidence']:<6s} -> Claude Watch [{r['video_sec']-10:.0f}s-{r['video_sec']+8:.0f}s]...", end="", flush=True)
-            watch_result = run_watch_verify(video_path, r)
-            if watch_result is not None:
-                r["video_sec"] = watch_result
-                r["confidence"] = "VERIFIED"
-                r["method"] = "ocr+watch"
-                print(f" FOUND at {watch_result:.1f}s")
-            else:
-                # Fall back to OCR + offset
-                r["video_sec"] += OCR_HIGH_CONFIDENCE_OFFSET
-                r["method"] = "ocr+offset(fallback)"
-                print(f" NOT_FOUND, using offset -> {r['video_sec']:.1f}s")
+            r["method"] = "ocr_only"
+            print(f"-> not found, keeping OCR estimate")
 
     print()
 
 
 def print_results(results):
-    method_col = any("method" in r for r in results)
-    print("=" * 80)
-    header = f"{'Clock':>7}  {'Player':<22} {'Type':<14} {'Video Sec':>10}  {'Conf'}"
-    if method_col:
-        header += f"      {'Method'}"
-    print(header)
-    print("-" * 80)
+    print("=" * 85)
+    print(f"{'Clock':>7}  {'Player':<22} {'Type':<14} {'Video Sec':>10}  {'Conf':>8}  {'Method'}")
+    print("-" * 85)
     for r in results:
         if r["video_sec"] is not None:
             vs = f"{r['video_sec']:.1f}s  ({int(r['video_sec'])//60}:{int(r['video_sec'])%60:02d})"
         else:
             vs = "NOT FOUND"
-        line = f"{r['clock']:>7}  {r['player']:<22} {r['subtype']:<14} {vs:>16}  {r['confidence']}"
-        if method_col and "method" in r:
-            line += f"  {r['method']}"
-        print(line)
-    print("=" * 80)
+        method = r.get("method", "")
+        print(f"{r['clock']:>7}  {r['player']:<22} {r['subtype']:<14} {vs:>16}  {r['confidence']:>8}  {method}")
+    print("=" * 85)
 
     resolved = sum(1 for r in results if r["video_sec"] is not None)
     verified = sum(1 for r in results if r.get("confidence") == "VERIFIED")
-    high = sum(1 for r in results if r["confidence"] == "HIGH")
-    print(f"\nResolved: {resolved}/{len(results)}  |  HIGH: {high}  VERIFIED: {verified}")
+    print(f"\nResolved: {resolved}/{len(results)}  |  VERIFIED: {verified}/{len(results)}")
 
 
 def clear_old_clips():
@@ -324,11 +263,11 @@ def main():
     # Step 5: Resolve events (OCR only)
     results = resolve_events(q1_lal, table)
 
-    # Step 6: Hybrid resolution — offset HIGH, Watch verify MEDIUM/LOW
-    apply_hybrid_resolution(results, VIDEO_PATH)
+    # Step 6: Score change verification
+    verify_all_events(results, VIDEO_PATH)
 
     # Step 7: Print final results
-    print("Q1 LAL Scoring Plays - Hybrid Resolved Timestamps")
+    print("Q1 LAL Scoring Plays - Final Timestamps")
     print_results(results)
 
     # Step 8: Cut clips

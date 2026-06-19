@@ -1,23 +1,35 @@
 # Architecture
 
 ## Pipeline Flow
-### Current Implemented Flow (as of June 2026)
+
+### Proven Baseline (Phase 5A — validated, slow)
 User uploads video + enters NBA game ID
 → backend fetches NBA play-by-play via nba_api
 → moment service extracts made shots; stores score_before/score_after
 → refinement service runs sequential anchor chain:
-    for each scoring play: watch.py scans a window, then returns FOUND/NOT_FOUND
+    for each scoring play: `watch.py` (Claude) scans a window, returns FOUND/NOT_FOUND
 → FFmpeg cuts fixed-window clips around stored timestamps
 → clips grouped by player in output folders
 
-### Target MVP Flow (planned, not implemented yet)
-User uploads video + enters NBA game ID + selects one team or both + selects players/all scorers
-→ backend fetches NBA play-by-play and builds expected scoring events in game order
-→ scorebug scanner pass (OCR/template matching) runs once over the game to build score/clock timeline
-→ mapper aligns NBA scoring events to observed score changes, writing timestamp + confidence
-→ only low-confidence events are sent to claude-video watch fallback
-→ frontend opens rapid review on timestamped segments first
-→ FFmpeg rendering/export runs after review (or on-demand)
+This worked: 37/37 clips, ~92% timestamping (34/37). Too slow (~2 min/play of Claude)
+and the fixed 7s/1s window mis-fit 8 plays. See [phases/first_run.md](phases/first_run.md).
+
+### Active MVP Flow (Phase 6 revised — see [phases/phase-6-revised-plan.md](phases/phase-6-revised-plan.md))
+User uploads video + enters NBA game ID + selects team + selects players / full team
+→ backend fetches NBA play-by-play, builds expected scoring events in game order
+→ refinement service runs the same sequential anchor chain, but the per-play confirmation
+   is the **deterministic score-flip detector** (`score_change_detector.py`, ~0.7s/play),
+   not a Claude call — it finds the frame where the score region flips score_before→after
+→ each play gets a confidence label: HIGH (clean flip near anchor) or LOW (no flip / disagreement)
+→ LOW-confidence plays (~3/game) are flagged for review (demo default); Claude `watch.py`
+   fallback on them is an optional later toggle
+→ clip service cuts **dynamic, play-aware windows** (transition/steal plays get extra lead)
+→ clips grouped by player; frontend opens review on flagged segments first
+
+Key point: the per-play confirmation is the *codification of what the 5A agent did*
+(read the score box, detect the change), so accuracy is preserved while removing the AI
+cost. The clock-OCR pass is **not** in this path — the anchor chain already positions
+each play from the previous confirmation.
 
 ## Pipeline Services
 
@@ -26,16 +38,19 @@ User uploads video + enters NBA game ID + selects one team or both + selects pla
 | NBAService | `nba_service.py` | Fetch play-by-play from nba_api with mock JSON fallback; populate score_before/score_after |
 | MomentService | `moment_service.py` | Filter highlight-worthy events and assign importance scores |
 | TimelineService | `timeline_service.py` | Legacy formula mapper (kept as fallback only; drifts in full games) |
-| RefinementService | `refinement_service.py` | Current baseline: sequential watch.py anchor-chain timestamping |
-| ScoreboardScanService | `scoreboard_scan_service.py` | Deterministic scorebug scan (template/OCR), one pass per game — see [phase-5b-hsv-mask-fix.md](phases/phase-5b-hsv-mask-fix.md) |
-| EventAlignmentService | `TBD` | Planned: map NBA score transitions to video timeline + confidence labels |
-| ClipService | `clip_service.py` | Cut clips around timestamps; move to post-review export path for MVP speed |
+| RefinementService | `refinement_service.py` | Sequential anchor chain. Per-play confirmation is being swapped from `watch.py` (Claude) to the deterministic flip detector; `watch.py` becomes flagged-only fallback |
+| ScoreChangeDetector | `score_change_detector.py` | **Primary confirmation.** White-pixel mask diff finds the exact frame the score region flips score_before→after (~0.7s/play). The codified version of what the 5A agent did |
+| ClipService | `clip_service.py` | Cut clips around confirmed timestamps; dynamic play-aware windows (Phase 6 revised) |
+| ClockOCRService / EventResolverService | `clock_ocr_service.py`, `event_resolver_service.py` | **Parked.** Clock-OCR pass — redundant with the anchor chain for scoring plays. Keep for non-scoring events (blocks/steals/assists) post-MVP |
 
 ### Role of Claude-video Watch
 
-- Keep `watch.py` as fallback for ambiguous/low-confidence mappings.
-- Use it for calibration/debug, not for every scoring play.
-- This reduces end-to-end latency and keeps AI in the loop only when deterministic parsing is uncertain.
+- `watch.py` is the **oracle/fallback**, not the per-play workhorse — used only on
+  LOW-confidence plays the flip detector can't confirm (~3/game).
+- Demo default is **flag-only** (surface in the review UI); auto-firing watch on flagged
+  plays is a later toggle.
+- It was also the source of the 5A gold-label run that the deterministic detector is
+  validated against.
 
 ### FFmpeg Utility (`ffmpeg.py`)
 

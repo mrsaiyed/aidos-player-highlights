@@ -99,11 +99,13 @@ def concatenate_clips(
     temp_file = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".txt", delete=False
+            mode="w", suffix=".txt", delete=False, encoding="utf-8"
         ) as f:
             temp_file = f.name
             for clip_path in clip_paths:
-                f.write(f"file '{clip_path}'\n")
+                # ffmpeg concat demuxer wants forward slashes even on Windows
+                safe = str(Path(clip_path).resolve()).replace("\\", "/")
+                f.write(f"file '{safe}'\n")
 
         ffmpeg = _resolve_tool("ffmpeg") or "ffmpeg"
         cmd = [

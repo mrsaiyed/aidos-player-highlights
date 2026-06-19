@@ -7,8 +7,9 @@ from app.utils.paths import (
     get_clips_dir,
 )
 from app.utils.constants import (
-    CLIP_PRE_ROLL_SECONDS,
-    CLIP_POST_ROLL_SECONDS,
+    SCORE_FLIP_LAG_SECONDS,
+    CLIP_LEAD_SECONDS,
+    CLIP_TRAIL_SECONDS,
     MAX_CLIPS_PER_PLAYER,
 )
 from app.models.clip import Clip
@@ -22,9 +23,25 @@ class ClipService:
         self,
         video_time_seconds: float,
         video_duration: float,
+        transition_lead: float | None = None,
     ) -> tuple[float, float]:
-        start = max(0.0, video_time_seconds - CLIP_PRE_ROLL_SECONDS)
-        end = min(video_duration, video_time_seconds + CLIP_POST_ROLL_SECONDS)
+        """Dynamic bounds anchored on the score flip.
+
+        video_time_seconds is the scorebug score-flip second; the ball goes through the net
+        ~SCORE_FLIP_LAG_SECONDS earlier, so we anchor on `net` and pad CLIP_LEAD before /
+        CLIP_TRAIL after — the ball lands CLIP_LEAD seconds into the clip.
+
+        transition_lead is accepted for a future "start at the steal" mode but is NOT used by
+        the default pipeline: v2 review showed a uniform 5-before-net window is what works, and
+        extra lead bloated transition clips. The detection is still stored on the moment for
+        when that smart mode is built.
+        """
+        net = video_time_seconds - SCORE_FLIP_LAG_SECONDS
+        lead = CLIP_LEAD_SECONDS
+        if transition_lead:
+            lead = max(lead, transition_lead)
+        start = max(0.0, net - lead)
+        end = min(video_duration, net + CLIP_TRAIL_SECONDS)
         return start, end
 
     def get_top_moments_per_player(
@@ -88,6 +105,8 @@ class ClipService:
                 clips.append(clip)
                 continue
 
+            # Uniform 5-before-net window (validated in v2 review). Transition lead is detected
+            # and stored on the moment but not applied here yet — see calculate_clip_bounds.
             start, end = self.calculate_clip_bounds(
                 moment.video_time_seconds, video_duration
             )

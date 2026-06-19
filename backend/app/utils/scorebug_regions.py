@@ -18,6 +18,10 @@ PROFILES = {
         "scorebug_region": (0, 628, 1280, 92),   # full bottom bar
         "clock_region": (598, 636, 125, 32),      # MM:SS digits — wide enough for 1-digit minutes ("9:50") through "11:59"
         "period_region": (682, 668, 55, 28),      # quarter indicator ("1st" / "2nd" etc.)
+        # Digit-only score boxes, verified at 1/2/3-digit scores (June 2026). y starts at 648
+        # to clear the crowd/court above the bar; widths fit 3 digits ("100").
+        "away_score_region": (210, 648, 95, 40),  # GSW score, right-aligned (grows left)
+        "home_score_region": (315, 648, 90, 40),  # LAL score, left-aligned (grows right)
     },
     # TNT broadcast — different games; scorebug top-left
     "tnt": {

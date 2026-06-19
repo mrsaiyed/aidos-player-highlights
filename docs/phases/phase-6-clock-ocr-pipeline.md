@@ -1,5 +1,14 @@
 # Phase 6: Clock OCR Pipeline
 
+> **⚠️ PARKED / SUPERSEDED (June 2026).** This clock-OCR-first plan is no longer the
+> active path — see [phase-6-revised-plan.md](phase-6-revised-plan.md). Reason: the
+> anchor chain already positions each play from the previous confirmation, so a separate
+> clock-OCR pass is redundant for **scoring** plays. The implemented code
+> (`clock_ocr_service.py`, `event_resolver_service.py`) is kept for a future use —
+> timing **non-scoring** events (blocks, steals, assists) that don't flip the score and
+> therefore can't be located by score-flip detection. Everything below is retained for
+> that revisit; it is not the current pipeline.
+
 ## What We're Building
 
 A single-pass OCR scanner that reads the **game clock** from the scorebug in the video, builds a lookup table mapping video seconds to game clock times, then joins that table with NBA API play-by-play data to resolve exact video timestamps for every scoring play.

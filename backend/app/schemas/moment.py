@@ -19,6 +19,8 @@ class MomentResponse(BaseModel):
     importance_score: int
     status: str
     refinement_method: Optional[str] = None
+    confidence: Optional[str] = None
+    transition_lead_seconds: Optional[float] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
