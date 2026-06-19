@@ -1,5 +1,10 @@
 # Architecture
 
+This doc covers the **clip engine** — layer [1] of the product. For the full five-layer product
+architecture (Ingest → Library → Compose → Review → Publish), the locked decisions, and the build
+tracks, see [STRATEGY.md](STRATEGY.md). The engine is **sealed**: its only output is *a tagged
+clip in the library*, and **broadcast is a per-game input** (a profile), never a fixed assumption.
+
 ## Pipeline Flow
 
 ### Proven Baseline (Phase 5A — validated, slow)
@@ -23,8 +28,9 @@ User uploads video + enters NBA game ID + selects team + selects players / full 
 → each play gets a confidence label: HIGH (clean flip near anchor) or LOW (no flip / disagreement)
 → LOW-confidence plays (~3/game) are flagged for review (demo default); Claude `watch.py`
    fallback on them is an optional later toggle
-→ clip service cuts **dynamic, play-aware windows** (transition/steal plays get extra lead)
-→ clips grouped by player; frontend opens review on flagged segments first
+→ clip service cuts **dynamic, play-aware windows** (net = flip − 3s; 5s before / 3s after)
+→ clips grouped by player; per-player reels concatenated; LOW-confidence plays flagged for the
+   eyeball review gate before publish (no web UI — CLI + local review)
 
 Key point: the per-play confirmation is the *codification of what the 5A agent did*
 (read the score box, detect the change), so accuracy is preserved while removing the AI

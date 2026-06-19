@@ -45,13 +45,12 @@ What needs to be built for full vision:
   Cloud storage per user account
 
 ## MVP North Star
-Local pipeline: NBA game ID + uploaded video
-→ team selector + player selector
-→ player-specific highlight clips → view per player in browser.
-No YouTube upload. No cloud storage. No OAuth. NBA only.
-MVP scope: one game, one team, buckets only.
-All other reel types and time periods are post-MVP.
-Architecture already supports them — just needs frontend filters and multi-game processing.
+A **command-line, no-frontend** tool for a single operator (see [STRATEGY.md](STRATEGY.md)):
+ingest a game (video + game ID + broadcast profile) → auto-produce per-player highlight reels
+(buckets) → quick eyeball → upload to YouTube. Each game is clipped **once** into a tagged
+**clip library**; cross-game reels ("AD all 3s this season") are queries over that library, built
+on demand. No web frontend, no auth (sharing = handing over the program). YouTube first, other
+platforms later.
 
 ## How It Works
 
@@ -104,13 +103,9 @@ calibrated to **one** broadcast (the ESPN Play-In game). A different broadcast n
 scoreboard re-located first — that's the next piece of work (auto-calibration using the NBA API
 score sequence as a reference to find the clock/score boxes on any video).
 
-**Hackathon MVP Frontend (Phase 7):**
-- Upload full game video + enter NBA game ID
-- Choose team (LAL or GSW from the upload)
-- Select players to clip (multi-select or "Full team — all scorers")
-- Trigger pipeline (fetch moments → refine moments → generate clips)
-- View generated clips per player in the browser
-- No approve/reject flow in hackathon MVP — just view and download
+**Frontend: dropped.** The product is a CLI + library, not a web app (decided June 2026).
+The build plan is the two tracks in [STRATEGY.md](STRATEGY.md): Track A (library + compose +
+YouTube publish) and Track B (broadcast generalization / auto-calibration).
 
 ## The Game We Are Using
 - Teams: Golden State Warriors vs Los Angeles Lakers
@@ -121,32 +116,36 @@ score sequence as a reference to find the clock/score boxes on any video).
 
 ## Hard Rules (Never Break These)
 - Never commit MP4 or video files to Git
-- No YouTube upload in MVP
-- No cloud storage in MVP
-- No real OAuth in MVP (simple bcrypt login only)
 - NBA only for now
+- Buckets (made shots) only for now — no non-scoring stats yet
+- Broadcast profile is a per-game input — never hardcode one broadcast into the pipeline
+- The clip engine is sealed — downstream depends on "a tagged clip in the library", not on detection internals
 - FFmpeg handles all video processing
 - All file paths go through backend/app/utils/paths.py
 - All pipeline results stored in SQLite
 
 ## Tech Stack
-- Backend: FastAPI + Python 3.12
+- Backend: FastAPI + Python 3.12 (deps via `uv`); driven as scripts/CLI, no frontend
 - Database: SQLite (via SQLAlchemy)
-- Video processing: FFmpeg
-- NBA data: nba_api library + mock JSON fallback
-- Frontend: Next.js
-- Auth: bcrypt + session token (cookie-based, simple)
-- Environment: GitHub Codespaces
-- AI coding: opencode + DeepSeek V4 Pro
+- Video processing: FFmpeg / ffprobe
+- Scoreboard reading: OpenCV (white-digit masking) + EasyOCR (digit OCR)
+- NBA data: nba_api library (`playbyplayv3`) + mock JSON fallback
+- Publish: YouTube Data API (planned); Publisher interface for other platforms later
+- Auth: none (single-operator tool)
 
 ## Current Phase
-Phase 6 (revised): Fast Anchor Chain — see [phases/phase-6-revised-plan.md](phases/phase-6-revised-plan.md).
-Keep the proven 5A anchor chain (validated ~92% timestamping, see [phases/first_run.md](phases/first_run.md))
-but swap the per-play claude-video confirmation for the deterministic score-flip detector
-(`score_change_detector.py`), demote `watch.py` to flagged-only fallback, and add dynamic
-play-aware clip windows. Phase 5B (scorebug OCR/template) is abandoned; Phase 5C clock-OCR is
-parked as redundant for scoring plays (kept for non-scoring events post-MVP).
-Phase 1 auth is built; MVP demo auth strategy still needs a final decision.
+Phase 6 (Fast Anchor Chain) is **implemented and validated** on the demo broadcast — forward
+score-signature detection + dynamic windows + per-player reels, 37/37 on game `0052000121`. See
+[phases/phase-6-implementation-plan.md](phases/phase-6-implementation-plan.md).
+
+Next is the product build in [STRATEGY.md](STRATEGY.md):
+- **Track A** — durable clip library + compose (query → reel) + YouTube publish, validated on the
+  demo game.
+- **Track B** — broadcast generalization / auto-calibration, the gate to arbitrary League Pass
+  games (needs sample scoreboard frames).
+
+Earlier directions are closed: Phase 5B (scorebug OCR/template) abandoned; Phase 5C clock-OCR
+parked (kept for future non-scoring events); the web frontend is dropped.
 
 ## What Is Working
 - FastAPI backend serving on port 8000

@@ -1,5 +1,10 @@
 # Phase 7: Hackathon MVP Frontend
 
+> **⚠️ DROPPED (June 2026).** The product is a CLI + clip library, not a web app. There is no
+> frontend. The Phase 7 slot is now "Clip Library / durable ingest" — see [PHASES.md](../PHASES.md)
+> and [STRATEGY.md](../STRATEGY.md). This doc is retained only as a record of the abandoned
+> frontend direction.
+
 ## Goal
 Build a minimal Next.js frontend that lets a user go from raw game video to rapid
 per-player bucket review in a single browser session.
