@@ -38,11 +38,10 @@ Pipeline supports this today because:
   Filtering happens at API layer — no pipeline changes needed
 
 What needs to be built for full vision:
-  Multi-game processing (loop over game IDs)
-  Season-long data storage
-  User-defined filter combinations in frontend
-  YouTube upload per reel
-  Cloud storage per user account
+  Broadcast generalization so any downloaded game can be ingested (Track B)
+  Multi-game ingest at scale (the library already spans games via season/date tags)
+  Cloud storage / multi-account (not needed for the single-operator tool)
+  (done: per-shot tagging, filter-combination reels via compose, YouTube upload per reel)
 
 ## MVP North Star
 A **command-line, no-frontend** tool for a single operator (see [STRATEGY.md](STRATEGY.md)):
@@ -175,9 +174,8 @@ parked (kept for future non-scoring events); the web frontend is dropped.
 ## Key Decisions Made
 - Manual quarter timestamps for MVP, auto-detection added later
 - Single sanitize_player_name function in paths.py used everywhere
-- Static files served by FastAPI at /outputs for video preview
-- Background tasks for pipeline so API does not time out
-- Auth deprioritized — auth system built in Phase 1 but full confirmation deferred until frontend is ready in Phase 7. Core logic exists: register, login, logout, me endpoints all created. Confirmation blocked on PowerShell curl issues, not code issues.
+- Background tasks for the `/process` endpoint so the API does not time out
+- Auth dropped — single-operator CLI tool, no accounts. (Register/login/me endpoints exist in code but are unused.)
 - constants.py is the single source of truth for all pipeline numbers. If a number appears in more than one place it belongs in constants.py instead.
 - conftest.py mock_events is the canonical test dataset. Any new test that needs play-by-play events uses this fixture.
 - Timeline formula: elapsed = QUARTER_DURATION_SECONDS - clock_remaining, video_time = quarter_start + elapsed. Manual quarter timestamps for MVP; auto-detection in Phase 8.
@@ -195,7 +193,7 @@ parked (kept for future non-scoring events); the web frontend is dropped.
 These docs are updated after every phase and every key decision.
 No phase is marked complete without passing its acceptance criteria.
 If a phase is deferred or partially complete it is marked as such.
-ROADMAP.html status is updated in sync with PHASES.md.
+[STRATEGY.md](STRATEGY.md) is the canonical product/architecture doc; [PHASES.md](PHASES.md) tracks status.
 - Unit tests written alongside every service
 - Run pytest before every git push
 - All tests must pass before a phase is marked complete

@@ -145,7 +145,7 @@ regression gate.
 4. Re-run the full game; score against `first_run.md` grades.
 5. Unified `POST /api/games/{id}/process` (fetch → anchor-chain confirm → window → cut)
    as a background task with a pollable status field.
-6. Hand off to the Hackathon MVP Frontend (Phase 7).
+6. Hand off to the clip library / compose / publish layers (Track A) — see [../STRATEGY.md](../STRATEGY.md).
 
 Steps 1–4 return us to the successful run — fast, cheap, and with the windowing fixed.
 Steps 5–6 wrap it for the demo.

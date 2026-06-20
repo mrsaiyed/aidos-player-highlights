@@ -149,8 +149,10 @@ those games — the library grows as you feed it games.
     "Steph floaters", "December 3s" are all one query.
   - **Review loop** (`nudge_clip.py`): nudge a library clip earlier/later, re-cut in place,
     `adjust_seconds` persists so the fix flows into every future reel.
-- **Not built:** **A3 publish** — YouTube upload (needs Google OAuth credentials). The everyday
-  "ingest → auto per-player review reels" convenience wrapper is also still a script-level manual
-  step (compose per player).
+  - **A3 — publish** (`youtube_publisher.py`, `youtube_auth.py`, `publish_reel.py`): one-time
+    YouTube connect (manual loopback OAuth), then `videos.insert` with auto-generated
+    title/description from the reel's metadata sidecar. **A reel was uploaded end-to-end.**
+- **Whole Track A loop is proven on the demo game:** ingest → library → compose → review → YouTube.
 - **Not started:** **Track B** — broadcast generalization / auto-calibration (the gate to real,
-  varied games; needs sample scoreboard frames).
+  varied games; needs sample scoreboard frames). Optional polish: a one-command "ingest → auto
+  per-player review reels" wrapper, and quota-aware batch publish (~6 uploads/day default cap).

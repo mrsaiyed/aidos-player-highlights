@@ -2,75 +2,71 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-(Note: `AGENTS.md` describes the original hackathon template scaffolding this repo was created from — devcontainer/Dockerfile conventions. It does not describe this project; this file does.)
+See also [AGENTS.md](AGENTS.md) (short agent notes) and [docs/STRATEGY.md](docs/STRATEGY.md) (canonical product + architecture).
 
 ## Project
 
-NBA Highlight MVP: given a full-game NBA video file + an NBA game ID, automatically generate per-player highlight clip reels. The pipeline fetches play-by-play data from the NBA API, maps scoring events to video timestamps, and cuts clips with FFmpeg.
+NBA Player Highlights: given a full-game NBA video + game ID, automatically produce per-player highlight reels and upload them to YouTube. A **single-operator CLI tool — no web frontend, no auth.** The pipeline fetches play-by-play, finds each basket's exact video moment by matching the on-screen scoreboard score to the play-by-play, cuts a clip per made shot into a tagged **clip library**, composes reels by **query** ("AD all 3s", "Steph floaters"), allows a quick human nudge-review, and publishes to YouTube. Buckets (made shots) only for now.
 
 The test game is GSW vs LAL, May 19 2021, Play-In Tournament (game ID `0052000121`).
 
 ## Build & Run
 
 ```bash
-# Install dependencies (from backend/)
-cd backend && uv sync
+cd backend && uv sync          # Python 3.12; FFmpeg + ffprobe on PATH
 
-# Run backend server
-cd backend && uv run uvicorn app.main:app --reload --port 8000
-
-# Run all tests
+# Tests
 cd backend && uv run pytest tests/ -v
+cd backend && uv run pytest tests/ -k "test_name" -v   # single test
 
-# Run a single test file
-cd backend && uv run pytest tests/test_moment_service.py -v
-
-# Run a single test by name
-cd backend && uv run pytest tests/ -k "test_name" -v
+# The pipeline (CLI). Run from backend/ — uv run python …, or .venv/Scripts/python.exe … on Windows:
+uv run python scripts/ingest_game.py <game_id> <video.mp4> <profile>    # -> data/library.db
+uv run python scripts/compose_reel.py --player Davis --category dunk --name ad_dunks
+uv run python scripts/nudge_clip.py --id <id> --earlier 5               # review fix, then re-compose
+uv run python scripts/youtube_auth.py                                   # one-time YouTube connect
+uv run python scripts/publish_reel.py --name ad_dunks --privacy unlisted
 ```
+
+The FastAPI app + `POST /process` endpoint exist, but the product is **script-driven (no frontend)**.
 
 ## Architecture
 
-**Pipeline flow:** Upload video + game ID -> NBA API fetch -> moment extraction -> timestamp refinement -> FFmpeg clip cutting -> per-player output folders.
+Five layers (see [docs/STRATEGY.md](docs/STRATEGY.md)): **ingest (clip engine) → clip library → compose (query → reel) → review/nudge → publish (YouTube)**. The clip engine is *sealed* — its only output is a tagged clip in the library, and broadcast is a per-game profile.
 
-**Key services** (all in `backend/app/services/`):
-- `nba_service.py` - Fetches play-by-play from nba_api; normalizes PT clock format; mock JSON fallback
-- `moment_service.py` - Extracts highlight-worthy events, assigns importance scores
-- `timeline_service.py` - Legacy formula mapper (game clock -> video timestamp); drifts in full games
-- `refinement_service.py` - Phase 5A baseline: sequential anchor chain via Claude Watch (works, ~70% frame-perfect, but ~1h15m per game — too slow for MVP)
-- `clip_service.py` - Calculates clip bounds, cuts via FFmpeg
-- `clock_ocr_service.py` - Phase 6: single-pass EasyOCR over sampled frames reads the scorebug *clock* (not the score), builds a `ClockTable` mapping video seconds -> (period, clock remaining). Lookup is gap-aware: uses 1:1 offset from the nearest reading across dead-ball gaps instead of linear interpolation
-- `event_resolver_service.py` - Phase 6: joins the `ClockTable` with moments, resolves each moment's video timestamp with high/medium/low confidence (by gap to nearest clock reading); Claude Watch fallback only for low-confidence events
-- `score_change_detector.py` - Phase 6 verification step: white-pixel-mask diff in the score region finds the exact frame the scorebug score updates (no OCR, ~1s per event)
+**Clip engine** (`backend/app/services/`) — find each basket's exact video moment, deterministically:
+- `nba_service.py` - play-by-play (`playbyplayv3`) + mock fallback; derives home/away tricodes + season; carries raw shot fields (distance, value, subtype, court x/y, action_id)
+- `moment_service.py` - filters to made shots; computes per-shot transition-lead (stored, not applied to bounds)
+- `score_change_detector.py` - **the detector.** Scans frames forward, finds candidate score-box changes (OpenCV white mask), then EasyOCR confirms the value transitions `score_before → score_after` (the score *signature*). Returns the exact video second
+- `refinement_service.py` - the anchor chain: walks every made shot in game order, calling the detector forward from the last confirmed play; records timestamp + confidence; self-heals on a miss. `watch.py` (Claude) is a default-off fallback
+- `clip_service.py` - dynamic clip bounds (net = flip − 3s; 5s before / 3s after) + FFmpeg cut
 
-**Key design insight (Phase 6):** OCR the *clock*, not the score — the NBA API already provides scores and game clock per play; only the clock->video-second mapping is missing. An earlier score-OCR/template-matching attempt (Phase 5B) got 0/37 matches and was abandoned. See `docs/phases/phase-6-clock-ocr-pipeline.md`.
+**Library / compose / publish:**
+- `ingest_service.py` - runs the engine over all made shots (both teams) → tagged `LibraryClip` rows in `data/library.db` (dedup on game_id+action_id); takes a broadcast-profile param
+- `compose_service.py` - query the library on any dimension (player/team/opponent/value/subtype/category/period/season/month/distance/date) → ordered clips → stitched reel + metadata sidecar
+- `render_service.py` - concatenate clips into a reel
+- `youtube_publisher.py` - one-time OAuth (`youtube_auth.py`) + `videos.insert`; auto title/description from the reel sidecar
 
-**Utilities** (`backend/app/utils/`):
-- `constants.py` - Single source of truth for all magic numbers (clip durations, quarter lengths, OCR sample interval, confidence thresholds, etc.)
-- `paths.py` - All file path resolution; `sanitize_player_name()` used everywhere
-- `ffmpeg.py` - `cut_clip()`, `get_video_duration()`, `concatenate_clips()`
-- `scorebug_regions.py` - Per-broadcast-network scorebug pixel-region profiles (clock/period/score crop boxes); `espn` is the default and matches the test game
+**Parked** (kept for future non-scoring events, NOT in the current path): `clock_ocr_service.py`, `event_resolver_service.py` (clock-OCR pipeline), `timeline_service.py` (legacy formula).
 
-**Diagnostic scripts** (`backend/scripts/`, run from `backend/` with `uv run python scripts/<name>.py`):
-- `diagnose_ocr.py` - Runs clock OCR on a short sample, dumps cropped frames + readings to `data/outputs/{game_id}/ocr_diag/` for inspection
-- `test_q1_ocr.py` - End-to-end Q1 hybrid pipeline test: clock table -> event resolution -> score-change verification -> clip cutting
+**Utilities** (`backend/app/utils/`): `constants.py` (all magic numbers), `paths.py` (`sanitize_player_name()`), `ffmpeg.py` (`cut_clip`/`get_video_duration`/`concatenate_clips`), `scorebug_regions.py` (per-broadcast scorebug pixel regions; `espn` matches the test game).
 
 **Data layout:**
 - `backend/data/uploads/{game_id}/` - uploaded full game video
 - `backend/data/outputs/{game_id}/clips/` - individual moment clips by player
 - `backend/data/mock/` - mock play-by-play JSON fallback
 
-**API routes** (`backend/app/api/`): auth, games, moments, clips - all under `/api/` prefix. Health at `/health`.
-
-**Database:** SQLite via SQLAlchemy. Tables: users, games, moments, clips, rendered_videos. Auto-created on startup.
+**Databases (SQLite via SQLAlchemy):**
+- `data/library.db` — the durable **clip library** (`library_clips` table), written by ingest, queried by compose. The product's source of truth.
+- `data/app.db` — the FastAPI app's tables (games, moments, clips); used by `/process` and the older per-game flow. Auth tables exist but are unused.
 
 ## Hard Rules
 
-- Never commit MP4/video files to git. Never commit files from `backend/data/uploads/` or `backend/data/outputs/`.
-- All magic numbers go in `constants.py`, nowhere else.
-- All file paths go through `paths.py`, never hardcoded.
-- All tests must pass before a phase is marked complete.
-- Test fixtures use `conftest.py` shared `mock_events` dataset and `db` fixture.
+- Never commit MP4/video files or anything under `backend/data/`. Never commit `backend/secrets/` (OAuth client + tokens).
+- Buckets (made shots) only for now — no non-scoring stats yet.
+- Broadcast is a per-game profile (`scorebug_regions.py`) — never hardcode one broadcast.
+- The clip engine is sealed — downstream (compose/publish) depends on "a tagged clip in the library", not on detection internals.
+- All magic numbers go in `constants.py`; all file paths through `paths.py`.
+- All tests must pass before work is marked complete. Test fixtures use `conftest.py` shared `mock_events` and `db` fixtures.
 
 ## Current State
 
@@ -80,4 +76,6 @@ The proven approach is the **Phase 5A anchor chain**: for each scoring play in g
 
 Two earlier directions are **not** active: Phase 5B scorebug OCR/template matching (abandoned, 0/37 — wrong target) and the Phase 5C clock-OCR pass (`clock_ocr_service` + `event_resolver_service`) which is **parked as redundant** with the anchor chain for scoring plays — kept only for future non-scoring events (blocks/steals/assists). Validation harness: `backend/scripts/validate_score_detector_v2.py`.
 
-**Product direction** (`docs/STRATEGY.md` is canonical): a single-operator **CLI tool, no web frontend, no auth**. Each game is ingested **once** into a tagged **clip library** (all made shots, both teams); per-player reels are produced, eyeballed, and uploaded to **YouTube**; cross-game reels ("AD all 3s this season") are **queries** over the library. The clip engine is **sealed** and **broadcast is a per-game profile** (never hardcode one broadcast). Build = **Track A** (library → compose → publish, on the demo game) + **Track B** (broadcast auto-calibration, the gate to real games). See `docs/PHASES.md` for the roadmap and `docs/ARCHITECTURE.md` for the engine.
+**Product direction** (`docs/STRATEGY.md` is canonical): a single-operator **CLI tool, no web frontend, no auth**. Each game is ingested **once** into a tagged **clip library** (all made shots, both teams); reels are composed by **query** ("AD all 3s this season"), nudge-reviewed, and uploaded to **YouTube**. The clip engine is **sealed**; **broadcast is a per-game profile**.
+
+**Track A is built and validated end-to-end on the demo game** — ingest (`ingest_service`) → library (`library_clip`) → compose (`compose_service`) → review (`nudge_clip`) → publish (`youtube_publisher`); a reel was uploaded to YouTube. **Track B** (broadcast generalization / auto-calibration) is the remaining gate to arbitrary League Pass games — it needs sample scoreboard frames. See `docs/PHASES.md` and `docs/STRATEGY.md`.

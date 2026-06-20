@@ -139,8 +139,11 @@ Templates are saved to `backend/data/outputs/{game_id}/scan/digit_templates/{pro
 
 Per-side confidence threshold: `SCOREBUG_MIN_SIDE_CONFIDENCE = 0.35` (each team score must pass independently).
 
-## Next steps (5C+)
+> **Abandoned approach (record only).** This score-OCR/template scanner got 0/37 and was dropped —
+> the working detector matches the score *signature* instead (see [phase-6-implementation-plan.md](phase-6-implementation-plan.md)).
+> Kept as a "why not to OCR the score" note. The items below were never built.
+
+## Next steps (superseded)
 
 - Map scanner transitions to NBA API play events
 - Route low-confidence plays to claude-video `watch.py` fallback
-- Unified pipeline endpoint (Phase 6) and hackathon frontend (Phase 7)

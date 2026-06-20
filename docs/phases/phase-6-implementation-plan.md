@@ -1,11 +1,14 @@
 # Phase 6 (Revised) — Implementation Plan
 
+> Historical build record for the detection engine (done & validated). The product is now a CLI +
+> clip library, not a frontend — current direction is [../STRATEGY.md](../STRATEGY.md).
+
 **Companion to:** [phase-6-revised-plan.md](phase-6-revised-plan.md) (the strategy). This doc is
 the concrete, file-by-file build plan.
 
-**Goal:** a pipeline behind a single frontend action — pick team + game ID + players → per-player
-bucket clips — at first-run accuracy (~92% timestamping, validated in [first_run.md](first_run.md)),
-fast, and without a Claude call per play.
+**Goal:** given team + game ID + players, produce per-player bucket clips at first-run accuracy
+(~92% timestamping, validated in [first_run.md](first_run.md)), fast, and without a Claude call
+per play.
 
 Build order is bottom-up: confirmation engine → the data it writes → the chain that drives it →
 windowing → endpoint → validation.
@@ -78,13 +81,13 @@ Fixes the 8 mis-windowed clips and Matthews: anchors on the reliable flip, appli
 
 ---
 
-## Stage 5 — One button for the frontend
+## Stage 5 — One-shot pipeline endpoint
 
 ### Change 8 · `app/api/clips.py` — unified `/process` + status model
 `POST /api/games/{id}/process` runs fetch → moments → anchor-chain confirm → clip cut as one
 background task, advancing `Game.status` (`fetching → confirming → cutting → done`) with counts.
-Add `GET /api/games/{id}/status` for polling. Accepts team / players / full-team filters. The exact
-backend contract Phase 7's UI sits on.
+Add `GET /api/games/{id}/status` for polling. Accepts team / players / full-team filters. (The
+product is now script-driven; this endpoint remains available but is not the primary path.)
 
 ---
 

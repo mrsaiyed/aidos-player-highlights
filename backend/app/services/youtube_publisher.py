@@ -62,9 +62,10 @@ class YouTubePublisher:
         self._service = None
 
     def _credentials(self):
+        """Load the saved token (refreshing if needed). Connecting is a separate one-time
+        step — scripts/youtube_auth.py — so publishing never triggers an interactive flow."""
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
-        from google_auth_oauthlib.flow import InstalledAppFlow
 
         creds = None
         if os.path.exists(self.token_file):
@@ -73,14 +74,13 @@ class YouTubePublisher:
             return creds
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-        else:
-            if not os.path.exists(self.client_file):
-                raise FileNotFoundError(f"OAuth client not found: {self.client_file}")
-            flow = InstalledAppFlow.from_client_secrets_file(self.client_file, SCOPES)
-            creds = flow.run_local_server(port=0)  # opens a browser for consent
-        with open(self.token_file, "w", encoding="utf-8") as f:
-            f.write(creds.to_json())
-        return creds
+            with open(self.token_file, "w", encoding="utf-8") as f:
+                f.write(creds.to_json())
+            return creds
+        raise RuntimeError(
+            "Not connected to YouTube. Run once:\n"
+            "    backend\\.venv\\Scripts\\python.exe backend\\scripts\\youtube_auth.py"
+        )
 
     def service(self):
         if self._service is None:
