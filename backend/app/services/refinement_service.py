@@ -38,9 +38,10 @@ class RefinementService:
         moments: list,
         db,
         use_watch_fallback: bool = False,
+        video_path: str | None = None,
     ) -> dict:
-        upload_dir = get_game_upload_dir(nba_game_id)
-        video_path = os.path.join(upload_dir, "full_game.mp4")
+        if video_path is None:
+            video_path = os.path.join(get_game_upload_dir(nba_game_id), "full_game.mp4")
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video not found: {video_path}")
 

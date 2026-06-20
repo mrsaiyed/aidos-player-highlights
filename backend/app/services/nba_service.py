@@ -31,18 +31,65 @@ class NBAService:
         return self._build_score_context(raw_events)
 
     def _build_score_context(self, raw_events: list[dict]) -> list[dict]:
+        # Derive the actual home/away tricodes from the score progression so score strings
+        # are correct for ANY game (no hardcoded LAL/GSW). The detector reads side by token
+        # position, not team name, so this stays compatible.
+        home_tri, away_tri = self._derive_home_away(raw_events)
+        self.home_tricode = home_tri
+        self.away_tricode = away_tri
+
         prev_home, prev_away = "0", "0"
         normalized = []
         for raw in raw_events:
             event = self.normalize_event(raw)
             curr_home = str(raw.get("scoreHome") or prev_home)
             curr_away = str(raw.get("scoreAway") or prev_away)
-            # scoreHome = LAL score, scoreAway = GSW score for game 0052000121
-            event["score_before"] = f"LAL {prev_home} GSW {prev_away}"
-            event["score_after"] = f"LAL {curr_home} GSW {curr_away}"
+            event["score_before"] = f"{home_tri} {prev_home} {away_tri} {prev_away}"
+            event["score_after"] = f"{home_tri} {curr_home} {away_tri} {curr_away}"
             prev_home, prev_away = curr_home, curr_away
             normalized.append(event)
         return normalized
+
+    def _derive_home_away(self, raw_events: list[dict]) -> tuple[str, str]:
+        """Find home/away tricodes by which team's score increments scoreHome vs scoreAway."""
+        home_tri = away_tri = None
+        prev_home, prev_away = 0, 0
+        for raw in raw_events:
+            sh, sa, tri = raw.get("scoreHome"), raw.get("scoreAway"), raw.get("teamTricode")
+            if not sh or not sa or not tri:
+                continue
+            try:
+                ch, ca = int(sh), int(sa)
+            except (ValueError, TypeError):
+                continue
+            if ch > prev_home and home_tri is None:
+                home_tri = tri
+            if ca > prev_away and away_tri is None:
+                away_tri = tri
+            prev_home, prev_away = ch, ca
+            if home_tri and away_tri:
+                break
+        return home_tri or "HOME", away_tri or "AWAY"
+
+    @staticmethod
+    def season_from_game_id(game_id: str) -> str | None:
+        """NBA game_id chars [3:5] are the season start year ('20' -> '2020-21')."""
+        if len(game_id) >= 5 and game_id[3:5].isdigit():
+            start = 2000 + int(game_id[3:5])
+            return f"{start}-{str(start + 1)[-2:]}"
+        return None
+
+    @staticmethod
+    def fetch_game_date(game_id: str) -> str | None:
+        """Best-effort ISO game date via boxscoresummary. Returns None on any failure
+        (offline / mock runs), so ingest never blocks on it — season is always derivable."""
+        try:
+            from nba_api.stats.endpoints import boxscoresummaryv2
+            df = boxscoresummaryv2.BoxScoreSummaryV2(game_id=game_id).game_summary.get_data_frame()
+            raw = str(df.iloc[0]["GAME_DATE_EST"])
+            return raw.split("T")[0] if raw else None
+        except Exception:
+            return None
 
     def load_mock_play_by_play(self) -> list[dict]:
         real_path = os.path.join(MOCK_DIR, "real_play_by_play.json")
@@ -96,6 +143,14 @@ class NBAService:
             "period": int(raw_event.get("period", 0)),
             "game_clock": self._parse_pt_clock(raw_event.get("clock", "")),
             "description": description,
+            # Raw API fields preserved for the clip library (queryable metadata)
+            "action_id": raw_event.get("actionId"),
+            "shot_distance": raw_event.get("shotDistance"),
+            "shot_value": raw_event.get("shotValue"),
+            "sub_type": raw_event.get("subType"),
+            "points": raw_event.get("pointsTotal"),
+            "loc_x": raw_event.get("xLegacy"),
+            "loc_y": raw_event.get("yLegacy"),
         }
 
     def _normalize_nba_api_event(self, raw_event: dict) -> dict:

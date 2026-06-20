@@ -71,6 +71,32 @@ The decisive seam is **[2] → [3]**: "tonight's Lakers reel" and "AD all 3s thi
 - A `Publisher` interface; `YouTubePublisher` first. Per-reel auto-generated title/description.
   Other platforms (TikTok, etc.) implement the same interface later.
 
+## Precision & the review loop
+
+**How accurate it is, and why.** Detection anchors on the **scoreboard score flip**, which is a
+rock-solid *play locator* (signature-confirmed, always just after the basket) — that's why
+~all baskets are found. The clip is then placed a **fixed 3s** before the flip to hit the net.
+The catch: the gap between ball-through-net and scoreboard-update is **variable** (usually ~3s,
+but 8–10s on replays / slow operators). So ~95%+ of clips land the ball at the 5s mark, and the
+rare long-lag outlier is a few seconds off.
+
+**The review loop (built).** This is the everyday safety net, and it's a 2-second fix:
+1. `compose_reel` → clips + reel in a folder, each line tagged with its library `id`.
+2. Watch. If a clip is a touch early/late, `nudge_clip --id N --earlier/--later S`.
+3. Nudge re-cuts the **library** clip in place and records `adjust_seconds` — so the correction
+   is **permanent** and flows into *every* future reel using that clip, not just this one.
+4. Re-run `compose_reel` to rebuild. Approve → publish.
+
+**Precision pass (future, optional).** To shrink even the rare nudge:
+- *Option 1 (cheap):* widen the lead so the net is **always** in frame — review then only ever
+  *centers*, never *re-finds* (the one hard requirement for fast review).
+- *Option 2 (the real fix, deterministic, no AI):* anchor the net on the **on-screen game clock**
+  instead of a fixed offset. The shot's game-clock time is exact and lag-free; read it from the
+  video (reusing the parked clock-OCR, pointed at the net moment) while the flip still locates
+  the play. Near-perfect centering.
+- *Option 3:* visual ball-through-hoop detection — true 100% but hard CV / AI-ish; skip, the
+  review loop already covers it.
+
 ## Metadata model — get this right now
 
 This is what makes "any reel, retroactively" possible without reprocessing. Store the **raw API
@@ -112,7 +138,19 @@ those games — the library grows as you feed it games.
 
 ## Status
 
-- **Built & validated (one broadcast):** detection (forward score-signature scan), dynamic clip
-  windows, per-player reel concatenation. 37/37 on the demo game.
-- **Not built:** durable library + rich metadata (A1), compose/query (A2), review+publish (A3).
-- **Not started:** broadcast generalization (Track B) — the gate to real, varied games.
+- **Built & validated (one broadcast):**
+  - Detection (forward score-signature scan), dynamic clip windows. 37/37 on the demo game.
+  - **A1 — clip library** (`ingest_service.py`, `library_clip.py`): ingest all made shots both
+    teams → tagged rows in `data/library.db`, dedup on (game_id, action_id), broadcast-profile
+    param. 74 clips ingested from the demo game.
+  - **A2 — compose** (`compose_service.py`): query the library on any dimension → folder + reel.
+    Filters: player, team, opponent, value, subtype, **category** (dunk/layup/three/two/floater/
+    midrange/paint), period, season, game, distance band, month, date range. e.g. "AD season 3s",
+    "Steph floaters", "December 3s" are all one query.
+  - **Review loop** (`nudge_clip.py`): nudge a library clip earlier/later, re-cut in place,
+    `adjust_seconds` persists so the fix flows into every future reel.
+- **Not built:** **A3 publish** — YouTube upload (needs Google OAuth credentials). The everyday
+  "ingest → auto per-player review reels" convenience wrapper is also still a script-level manual
+  step (compose per player).
+- **Not started:** **Track B** — broadcast generalization / auto-calibration (the gate to real,
+  varied games; needs sample scoreboard frames).
