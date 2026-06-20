@@ -78,4 +78,12 @@ Two earlier directions are **not** active: Phase 5B scorebug OCR/template matchi
 
 **Product direction** (`docs/STRATEGY.md` is canonical): a single-operator **CLI tool, no web frontend, no auth**. Each game is ingested **once** into a tagged **clip library** (all made shots, both teams); reels are composed by **query** ("AD all 3s this season"), nudge-reviewed, and uploaded to **YouTube**. The clip engine is **sealed**; **broadcast is a per-game profile**.
 
-**Track A is built and validated end-to-end on the demo game** — ingest (`ingest_service`) → library (`library_clip`) → compose (`compose_service`) → review (`nudge_clip`) → publish (`youtube_publisher`); a reel was uploaded to YouTube. **Track B** (broadcast generalization / auto-calibration) is the remaining gate to arbitrary League Pass games — it needs sample scoreboard frames. See `docs/PHASES.md` and `docs/STRATEGY.md`.
+**Track A is built and validated end-to-end on the demo game** — ingest (`ingest_service`) → library (`library_clip`) → compose (`compose_service`) → review (`nudge_clip`) → publish (`youtube_publisher`). All 10 Lakers per-player reels were uploaded to YouTube in one batch run (`make_player_reels.py` → `publish_player_reels.py`). Step-by-step usage is in `docs/USAGE.md`.
+
+**Current state / handoff notes:**
+- The demo game (`0052000121`) is ingested into `data/library.db`; LAL clips are currently **10s** (extended from 8s via `extend_clips.py`).
+- Helper scripts beyond the core CLI: `make_player_reels.py` (one reel per player), `extend_clips.py` (lengthen clips), `publish_player_reels.py` (batch upload, video/Short by duration).
+- **Open thread:** the uploaded "Shorts" are 16:9 landscape, so YouTube may classify them as regular videos. Making true Shorts needs the reels reformatted to vertical 9:16 — not built. The quota cap is project-dependent (a full 10-reel batch uploaded fine).
+- Work is on branch **`phase-6-signature-detection`** (not merged to main); GitHub remote renamed to `aidos-player-highlights` (local origin still uses the old URL via redirect).
+
+**Track B** (broadcast generalization / auto-calibration) is the remaining gate to arbitrary League Pass games — it needs sample scoreboard frames. See `docs/PHASES.md` and `docs/STRATEGY.md`.

@@ -69,10 +69,18 @@ in the library:
 
 Then re-run Step 2 to rebuild the affected reel.
 
-### Step 4 — Publish the ones you want
+### Step 4 — Publish
+
+Publish them all in one go — reels shorter than `--short-under` seconds go up tagged `#Shorts`,
+longer ones as regular videos:
 
 ```bash
-.venv\Scripts\python.exe scripts\publish_reel.py --name lakers_buckets_James --privacy unlisted
+.venv\Scripts\python.exe scripts\publish_player_reels.py --prefix lakers_buckets --short-under 90 --privacy unlisted
+```
+
+…or publish a single reel:
+
+```bash
 .venv\Scripts\python.exe scripts\publish_reel.py --name lakers_buckets_Davis --privacy unlisted
 ```
 
@@ -119,6 +127,19 @@ The same filters span every game in the library:
 
 ---
 
+## Clip length
+
+Clips are 8s by default (`[flip-8, flip]`: the bucket lands at the 5s mark, 3s after). To make a
+set longer, extend the end without changing anything else, then rebuild the reels:
+
+```bash
+.venv\Scripts\python.exe scripts\extend_clips.py --team LAL --game 0052000121 --seconds 2   # 8s -> 10s
+.venv\Scripts\python.exe scripts\make_player_reels.py --team LAL --game 0052000121 --prefix lakers_buckets
+```
+
+(`extend_clips` takes the same filters as compose, and updates the library so all future reels use
+the longer clips.)
+
 ## 3. Review & fix details
 
 - `compose_reel.py` prints each clip's library `id`.
@@ -132,10 +153,17 @@ The same filters span every game in the library:
   verified this app"* (**Advanced → Go to app → Allow**), then your browser lands on a `localhost`
   page that **fails to load** (expected) — copy that full address-bar URL and paste it back at the
   prompt. A token is saved; future uploads need no browser.
-- **Publish:** `publish_reel.py --name <reel> --privacy unlisted|private|public [--title "..."]`.
+- **Publish one:** `publish_reel.py --name <reel> --privacy unlisted|private|public [--title "..."]`.
   Running it is the approval — review the reel first.
-- **Quota:** ~6 uploads/day on the default YouTube quota. For a full team, publish the reels you
-  want, spread across days, or request a quota increase in Google Cloud.
+- **Publish a whole set:** `publish_player_reels.py --prefix <prefix> --short-under 90 --privacy unlisted`
+  uploads every `{prefix}_*` reel; reels under `--short-under` seconds go up tagged `#Shorts`, the
+  rest as regular videos. Quota errors are caught per reel so one failure doesn't stop the batch.
+- **Quota:** the documented default is ~6 uploads/day (10,000 units, 1,600/upload) — but in
+  practice a full 10-reel batch uploaded fine, so quota is project-dependent; just run it and the
+  batch reports any failures.
+- **Shorts caveat:** `#Shorts` only makes a video a Short if it's **vertical/square**. Our reels are
+  16:9 landscape, so they'll likely appear as regular (short) videos despite the tag. True Shorts
+  need the reels reformatted to vertical 9:16 — not built yet.
 
 ## 5. Adding more games
 
