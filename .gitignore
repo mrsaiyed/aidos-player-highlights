@@ -96,3 +96,9 @@ backend/data/outputs/0052000121/watch_test_clips/
 
 # Claude skills (local install)
 ~/.claude/
+
+# Secrets — OAuth client + tokens (NEVER commit)
+backend/secrets/
+youtube_client.json
+youtube_token.json
+*client_secret*.json

@@ -57,7 +57,7 @@ def main():
     if not clips:
         print("Nothing to compose."); return
 
-    res = svc.build_reel(clips, os.path.join(COMPOSED_DIR, args.name), args.name)
+    res = svc.build_reel(clips, os.path.join(COMPOSED_DIR, args.name), args.name, filters)
     print(f"\nFolder: {res['folder']}")
     print(f"Reel:   {res['reel']}  ({res['clips']} clips)")
     db.close()

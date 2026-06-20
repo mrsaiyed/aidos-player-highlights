@@ -6,6 +6,7 @@ categories (midrange, floater, paint) are derived from the raw API fields at que
 re-ingest is needed to support a new filter.
 """
 
+import json
 import logging
 import os
 import shutil
@@ -75,8 +76,10 @@ class ComposeService:
                                   -_parse_clock(c.game_clock)))
         return clips
 
-    def build_reel(self, clips: list[LibraryClip], out_dir: str, name: str) -> dict:
-        """Copy clips into out_dir (game order) and stitch into {name}.mp4."""
+    def build_reel(self, clips: list[LibraryClip], out_dir: str, name: str,
+                   filters: dict | None = None) -> dict:
+        """Copy clips into out_dir (game order), stitch into {name}.mp4, and write {name}.json
+        metadata (players/teams/dates/filters) so the publish step can auto-title the reel."""
         os.makedirs(out_dir, exist_ok=True)
         copied = []
         for i, c in enumerate(clips, 1):
@@ -89,4 +92,31 @@ class ComposeService:
             copied.append(dest)
         reel = os.path.join(out_dir, f"{name}.mp4")
         ok = RenderService().render_reel(copied, reel) if copied else None
-        return {"folder": out_dir, "reel": reel if ok else None, "clips": len(copied)}
+
+        meta = self._reel_meta(name, clips, filters or {})
+        with open(os.path.join(out_dir, f"{name}.json"), "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
+
+        return {"folder": out_dir, "reel": reel if ok else None, "clips": len(copied), "meta": meta}
+
+    @staticmethod
+    def _reel_meta(name: str, clips: list[LibraryClip], filters: dict) -> dict:
+        def uniq(attr):
+            return sorted({getattr(c, attr) for c in clips if getattr(c, attr)})
+        dates = uniq("game_date")
+        return {
+            "name": name,
+            "filters": {k: v for k, v in filters.items() if k != "name"},
+            "clip_count": len(clips),
+            "players": uniq("player_name"),
+            "teams": uniq("team"),
+            "opponents": uniq("opponent"),
+            "seasons": uniq("season"),
+            "date_min": dates[0] if dates else None,
+            "date_max": dates[-1] if dates else None,
+            "clips": [
+                {"id": c.id, "player": c.player_name, "period": c.period,
+                 "clock": c.game_clock, "subtype": c.shot_subtype, "value": c.shot_value}
+                for c in clips
+            ],
+        }
