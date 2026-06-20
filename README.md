@@ -59,7 +59,8 @@ cd backend && uv run pytest tests/ -v
 
 ## Docs
 
-- [`docs/STRATEGY.md`](docs/STRATEGY.md) — product strategy + five-layer architecture (**start here**)
+- [`docs/USAGE.md`](docs/USAGE.md) — **step-by-step runbook** (ingest → per-player reels → YouTube)
+- [`docs/STRATEGY.md`](docs/STRATEGY.md) — product strategy + five-layer architecture
 - [`docs/PROJECT.md`](docs/PROJECT.md) — what it is + "How It Works" (plain-English & technical)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the sealed clip engine
 - [`docs/PHASES.md`](docs/PHASES.md) — phase history + roadmap
