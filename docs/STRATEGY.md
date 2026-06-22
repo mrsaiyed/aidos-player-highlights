@@ -153,6 +153,11 @@ those games — the library grows as you feed it games.
     YouTube connect (manual loopback OAuth), then `videos.insert` with auto-generated
     title/description from the reel's metadata sidecar. **A reel was uploaded end-to-end.**
 - **Whole Track A loop is proven on the demo game:** ingest → library → compose → review → YouTube.
-- **Not started:** **Track B** — broadcast generalization / auto-calibration (the gate to real,
-  varied games; needs sample scoreboard frames). Optional polish: a one-command "ingest → auto
-  per-player review reels" wrapper, and quota-aware batch publish (~6 uploads/day default cap).
+- **Track B core proven** (`scripts/autocalibrate_poc.py`): the auto-calibrator rediscovers the
+  full ESPN scoreboard from scratch — both score boxes, the clock, and home/away — using only the
+  API score sequence (no hardcoded regions). Validated by reproducing the hardcoded `espn` profile.
+  **Remaining:** (1) productionize into a profile output (+ small padding) and confirm an
+  auto-profile detection run matches the hardcoded one end-to-end; (2) the real test — a **second
+  broadcast** (a non-ESPN game video + its NBA game ID), which is what proves it generalizes.
+- **Optional polish:** a one-command "ingest → auto per-player review reels" wrapper; vertical 9:16
+  reels for true YouTube Shorts (current reels are 16:9 landscape).
