@@ -43,9 +43,11 @@ def main():
     ap.add_argument("--month", type=int)
     ap.add_argument("--from", dest="date_from")
     ap.add_argument("--to", dest="date_to")
+    ap.add_argument("--vertical", action="store_true", help="build 9:16 reels for YouTube Shorts")
     args = ap.parse_args()
 
-    filters = {k: v for k, v in vars(args).items() if k != "prefix" and v is not None}
+    filters = {k: v for k, v in vars(args).items()
+               if k not in ("prefix", "vertical") and v is not None}
     db = sessionmaker(bind=create_engine(f"sqlite:///{LIBRARY_DB}"))()
     svc = ComposeService()
     clips = svc.query(db, **filters)
@@ -58,7 +60,8 @@ def main():
     for player in sorted(by_player):
         group = by_player[player]
         name = f"{args.prefix}_{sanitize_player_name(player)}"
-        res = svc.build_reel(group, os.path.join(COMPOSED_DIR, name), name, {**filters, "player": player})
+        res = svc.build_reel(group, os.path.join(COMPOSED_DIR, name), name,
+                             {**filters, "player": player}, args.vertical)
         print(f"  {player:<18} {res['clips']:>2} clips -> composed/{name}/{name}.mp4")
 
     print(f"\nDone. Publish any with:  scripts/publish_reel.py --name {args.prefix}_<player> --privacy unlisted")

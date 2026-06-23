@@ -15,6 +15,7 @@ from sqlalchemy import func
 
 from app.models.library_clip import LibraryClip
 from app.services.render_service import RenderService
+from app.utils.ffmpeg import to_vertical
 from app.utils.paths import sanitize_player_name
 
 logger = logging.getLogger(__name__)
@@ -77,9 +78,12 @@ class ComposeService:
         return clips
 
     def build_reel(self, clips: list[LibraryClip], out_dir: str, name: str,
-                   filters: dict | None = None) -> dict:
+                   filters: dict | None = None, vertical: bool = False) -> dict:
         """Copy clips into out_dir (game order), stitch into {name}.mp4, and write {name}.json
-        metadata (players/teams/dates/filters) so the publish step can auto-title the reel."""
+        metadata (players/teams/dates/filters) so the publish step can auto-title the reel.
+
+        vertical=True converts the reel to a 9:16 frame (blurred-pad) for YouTube Shorts.
+        """
         os.makedirs(out_dir, exist_ok=True)
         copied = []
         for i, c in enumerate(clips, 1):
@@ -90,8 +94,17 @@ class ComposeService:
             dest = os.path.join(out_dir, f"{i:02d}_{sanitize_player_name(c.player_name)}_Q{c.period}_{clock_tag}s.mp4")
             shutil.copy(c.file_path, dest)
             copied.append(dest)
+
         reel = os.path.join(out_dir, f"{name}.mp4")
-        ok = RenderService().render_reel(copied, reel) if copied else None
+        ok = None
+        if copied and vertical:
+            tmp = os.path.join(out_dir, f"_{name}_h.mp4")
+            if RenderService().render_reel(copied, tmp):
+                ok = to_vertical(tmp, reel)
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        elif copied:
+            ok = RenderService().render_reel(copied, reel)
 
         meta = self._reel_meta(name, clips, filters or {})
         with open(os.path.join(out_dir, f"{name}.json"), "w", encoding="utf-8") as f:

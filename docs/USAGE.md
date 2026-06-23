@@ -161,9 +161,11 @@ the longer clips.)
 - **Quota:** the documented default is ~6 uploads/day (10,000 units, 1,600/upload) — but in
   practice a full 10-reel batch uploaded fine, so quota is project-dependent; just run it and the
   batch reports any failures.
-- **Shorts caveat:** `#Shorts` only makes a video a Short if it's **vertical/square**. Our reels are
-  16:9 landscape, so they'll likely appear as regular (short) videos despite the tag. True Shorts
-  need the reels reformatted to vertical 9:16 — not built yet.
+- **For true Shorts, build vertical reels:** YouTube only files **vertical/square** videos as
+  Shorts. Add `--vertical` to `compose_reel.py` or `make_player_reels.py` to produce 9:16 reels
+  (the 16:9 play centered with a blurred fill top/bottom — nothing cropped), e.g.
+  `make_player_reels.py --team LAL --game 0052000121 --prefix lakers_shorts --vertical`. Then
+  `publish_player_reels.py --prefix lakers_shorts --short-under 90` uploads them tagged `#Shorts`.
 
 ## 5. Adding more games
 

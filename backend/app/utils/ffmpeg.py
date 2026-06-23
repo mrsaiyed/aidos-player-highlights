@@ -91,6 +91,34 @@ def get_video_duration(video_path: str) -> float:
     return _duration_from_ffmpeg(video_path)
 
 
+def to_vertical(
+    input_path: str,
+    output_path: str,
+    width: int = 1080,
+    height: int = 1920,
+) -> bool:
+    """Convert a landscape (16:9) video to a vertical (9:16) frame for YouTube Shorts.
+
+    Centers the original video on a vertical canvas and fills the top/bottom with a blurred,
+    zoomed copy of itself — so the full play stays visible (nothing cropped out).
+    """
+    ffmpeg = _resolve_tool("ffmpeg") or "ffmpeg"
+    vf = (
+        "split[a][b];"
+        f"[a]scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},boxblur=20:5[bg];"
+        f"[b]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
+        "[bg][fg]overlay=(W-w)/2:(H-h)/2"
+    )
+    cmd = [ffmpeg, "-i", input_path, "-vf", vf, "-c:a", "copy", "-y", output_path]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        logger.info("Converted to vertical: %s", output_path)
+        return True
+    logger.info("Vertical conversion failed: %s", result.stderr[-300:] if result.stderr else "")
+    return False
+
+
 def concatenate_clips(
     clip_paths: list[str],
     output_path: str,

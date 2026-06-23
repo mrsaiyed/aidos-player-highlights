@@ -43,9 +43,11 @@ def main():
     ap.add_argument("--month", type=int, help="1-12, filters on game month")
     ap.add_argument("--from", dest="date_from", help="ISO date lower bound")
     ap.add_argument("--to", dest="date_to", help="ISO date upper bound")
+    ap.add_argument("--vertical", action="store_true", help="build a 9:16 reel for YouTube Shorts")
     args = ap.parse_args()
 
-    filters = {k: v for k, v in vars(args).items() if k != "name" and v is not None}
+    filters = {k: v for k, v in vars(args).items()
+               if k not in ("name", "vertical") and v is not None}
     db = sessionmaker(bind=create_engine(f"sqlite:///{LIBRARY_DB}"))()
     svc = ComposeService()
     clips = svc.query(db, **filters)
@@ -57,7 +59,7 @@ def main():
     if not clips:
         print("Nothing to compose."); return
 
-    res = svc.build_reel(clips, os.path.join(COMPOSED_DIR, args.name), args.name, filters)
+    res = svc.build_reel(clips, os.path.join(COMPOSED_DIR, args.name), args.name, filters, args.vertical)
     print(f"\nFolder: {res['folder']}")
     print(f"Reel:   {res['reel']}  ({res['clips']} clips)")
     db.close()
