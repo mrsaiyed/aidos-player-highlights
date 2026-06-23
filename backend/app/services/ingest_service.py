@@ -38,6 +38,17 @@ class IngestService:
         self.profile_name = profile_name
 
     def ingest(self, nba_game_id: str, video_path: str, db, cut_clips: bool = True) -> dict:
+        # profile="auto" -> discover the scoreboard for this broadcast from the API scores
+        if self.profile_name == "auto":
+            from app.services.autocalibrate_service import auto_calibrate
+            from app.utils.scorebug_regions import register_profile
+            logger.info("Auto-calibrating broadcast for %s ...", nba_game_id)
+            prof = auto_calibrate(video_path, nba_game_id)
+            if not prof:
+                raise RuntimeError("Auto-calibration could not locate the scoreboard")
+            self.profile_name = f"auto_{nba_game_id}"
+            register_profile(self.profile_name, prof)
+
         nba = NBAService()
         events = nba.fetch_play_by_play(nba_game_id)
         home, away = nba.home_tricode, nba.away_tricode

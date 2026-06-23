@@ -3,7 +3,9 @@
 Usage:
     .venv/Scripts/python.exe scripts/ingest_game.py [nba_game_id] [video_path] [profile]
 
-Defaults to the demo game. Re-running the same game is idempotent (dedup on game_id+action_id).
+`profile` is a named scorebug profile (e.g. `espn`) or `auto` to auto-calibrate the scoreboard
+for an unfamiliar broadcast from the API score sequence. Defaults to the demo game.
+Re-running the same game is idempotent (dedup on game_id+action_id).
 """
 
 import os

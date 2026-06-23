@@ -43,3 +43,8 @@ DEFAULT_PROFILE = "espn"
 def get_profile(name: str | None = None) -> dict:
     """Return the scorebug region profile by name, falling back to default."""
     return PROFILES.get(name or DEFAULT_PROFILE, PROFILES[DEFAULT_PROFILE])
+
+
+def register_profile(name: str, profile: dict) -> None:
+    """Register a profile at runtime (e.g. one produced by auto-calibration)."""
+    PROFILES[name] = profile
