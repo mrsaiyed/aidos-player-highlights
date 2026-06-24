@@ -98,7 +98,10 @@ def auto_calibrate(video_path: str, game_id: str, n_frames: int = DEFAULT_FRAMES
         h = int(max(o["y"] + o["h"] for o in obs)) - y
         return (x, y, w, h)
 
-    # candidate numeric regions: persistent + mostly non-decreasing + max at a final score
+    # candidate numeric regions: persistent + cleanly increasing (a team's score climbs all
+    # game and never decreases). Don't require max == the final score — frame sampling can miss
+    # the last baskets — just a plausibly high value that never exceeds the final.
+    hi = max(home_final, away_final)
     cands = []
     for obs in num_cells.values():
         if len(obs) < n_frames * 0.35:
@@ -107,7 +110,7 @@ def auto_calibrate(video_path: str, game_id: str, n_frames: int = DEFAULT_FRAMES
         vals = [o["val"] for o in obs]
         nondec = sum(vals[k] <= vals[k + 1] for k in range(len(vals) - 1)) / max(1, len(vals) - 1)
         mx = max(vals)
-        if nondec > 0.8 and min(abs(mx - home_final), abs(mx - away_final)) <= 8:
+        if nondec >= 0.85 and 0.4 * hi <= mx <= hi + 5:
             cands.append({"obs": obs, "max": mx, "bbox": bbox_of(obs)})
     cands.sort(key=lambda c: c["max"], reverse=True)
 
