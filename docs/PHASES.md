@@ -15,10 +15,12 @@
 | 7 | Clip Library — durable ingest (all players/both teams, broadcast-profile param, rich metadata) — **Track A1** | **Done** — 74 clips ingested from the demo game into `data/library.db` |
 | 8 | Compose — filter query → stitched reel — **Track A2** | **Done** — `compose_service`; player/category/season/month/distance/etc. filters |
 | 9 | Review nudge + YouTube publish — **Track A3** | **Done & validated** — `nudge_clip`, `youtube_publisher`; a reel was uploaded to YouTube end-to-end |
-| 10 | Broadcast generalization / auto-calibration — **Track B** (gate to real, varied games) | Planned — needs sample scoreboard frames |
+| 10 | Broadcast generalization / auto-calibration — **Track B** (gate to real, varied games) | **Proven** — `auto_calibrate` finds the scoreboard from API scores; validated on a 2nd broadcast (Hawks/Luka `0022300634`); wired into ingest as `auto`; `find_game_id` added |
+| 11 | Vertical Shorts — dynamic reframing (auto-pan to keep the ball centered) | Planned — current `--vertical` static center-crop loses the ball on wing plays; researching |
 
 > **Direction (June 2026):** product is a CLI + clip library, **no web frontend**, no auth.
-> Track A (ingest → library → compose → review → YouTube) is **built and validated end-to-end on
-> the demo game**. Track B (broadcast generalization) is the remaining gate to arbitrary League
-> Pass games. See [STRATEGY.md](STRATEGY.md). 5B dead; 5C clock-OCR parked (future non-scoring
-> events); auto quarter detection superseded by the anchor chain.
+> Track A (ingest → library → compose → review → YouTube) is **built and validated end-to-end**.
+> Track B (broadcast generalization) is **proven** — auto-calibration works on an unseen broadcast
+> (validated on the Hawks/Luka game), so the pipeline is no longer tied to one broadcast. Open work:
+> **dynamic vertical reframing** for Shorts (Phase 11). See [STRATEGY.md](STRATEGY.md). 5B dead; 5C
+> clock-OCR parked (future non-scoring events); auto quarter detection superseded by the anchor chain.

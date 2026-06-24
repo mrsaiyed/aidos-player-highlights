@@ -153,11 +153,18 @@ those games — the library grows as you feed it games.
     YouTube connect (manual loopback OAuth), then `videos.insert` with auto-generated
     title/description from the reel's metadata sidecar. **A reel was uploaded end-to-end.**
 - **Whole Track A loop is proven on the demo game:** ingest → library → compose → review → YouTube.
-- **Track B core proven** (`scripts/autocalibrate_poc.py`): the auto-calibrator rediscovers the
-  full ESPN scoreboard from scratch — both score boxes, the clock, and home/away — using only the
-  API score sequence (no hardcoded regions). Validated by reproducing the hardcoded `espn` profile.
-  **Remaining:** (1) productionize into a profile output (+ small padding) and confirm an
-  auto-profile detection run matches the hardcoded one end-to-end; (2) the real test — a **second
-  broadcast** (a non-ESPN game video + its NBA game ID), which is what proves it generalizes.
-- **Optional polish:** a one-command "ingest → auto per-player review reels" wrapper; vertical 9:16
-  reels for true YouTube Shorts (current reels are 16:9 landscape).
+- **Track B — broadcast generalization: PROVEN.** `autocalibrate_service.auto_calibrate(video,
+  game_id)` finds the scoreboard from the API score sequence (no hardcoded regions): it samples
+  frames, OCRs the whole frame, and picks the two cleanly-climbing number regions (score boxes) +
+  the MM:SS region (clock), assigning home/away by matching joint `(left,right)` readings to the
+  API `(home, away)` pairs. Validated on **two broadcasts**: it reproduces the hand-tuned ESPN
+  profile, and it located the scoreboard on a never-seen **Hawks** feed (Luka 73-pt game
+  `0022300634`) with correct home/away. Wired into ingest as `ingest_game.py <id> <video> auto`.
+  `find_game_id(team, date)` identifies an untitled game so any download/capture can be ingested.
+- **Open — vertical Shorts (needs real work, not a quick fix).** `--vertical` (`ffmpeg.to_vertical`)
+  makes 9:16 reels via a **static center-crop** — it fills the frame but the ball drifts out of
+  frame on wing plays, so it isn't good enough. The planned solution is **dynamic reframing**:
+  track the action and pan the crop window smoothly to keep the ball centered. Researching
+  approaches (auto-reframe tools, ball/player tracking, saliency) before implementing.
+- **Optional polish:** a one-command "ingest → auto per-player review reels" wrapper; per-reel
+  title generation (titles are currently generic); merging the work branch to `main`.

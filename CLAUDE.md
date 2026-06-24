@@ -80,10 +80,13 @@ Two earlier directions are **not** active: Phase 5B scorebug OCR/template matchi
 
 **Track A is built and validated end-to-end on the demo game** — ingest (`ingest_service`) → library (`library_clip`) → compose (`compose_service`) → review (`nudge_clip`) → publish (`youtube_publisher`). All 10 Lakers per-player reels were uploaded to YouTube in one batch run (`make_player_reels.py` → `publish_player_reels.py`). Step-by-step usage is in `docs/USAGE.md`.
 
+**Track B (broadcast generalization) is proven** — auto-calibration (`autocalibrate_service.auto_calibrate`) locates the scoreboard on an unseen broadcast purely from the API score sequence. Validated on a **second broadcast** (the Hawks feed, Luka 73-pt game `0022300634`): it placed both score boxes + clock and assigned home/away with nothing hardcoded. Wired into ingest: `ingest_game.py <id> <video> auto`. `NBAService.find_game_id(team, date)` (+ `find_game_id.py`) identifies an untitled game so any download/capture can be ingested.
+
 **Current state / handoff notes:**
-- The demo game (`0052000121`) is ingested into `data/library.db`; LAL clips are currently **10s** (extended from 8s via `extend_clips.py`).
-- Helper scripts beyond the core CLI: `make_player_reels.py` (one reel per player), `extend_clips.py` (lengthen clips), `publish_player_reels.py` (batch upload, video/Short by duration).
-- **Open thread:** the uploaded "Shorts" are 16:9 landscape, so YouTube may classify them as regular videos. Making true Shorts needs the reels reformatted to vertical 9:16 — not built. The quota cap is project-dependent (a full 10-reel batch uploaded fine).
+- Library `data/library.db`: demo game (`0052000121`, LAL clips currently **10s** via `extend_clips.py`) and the Luka game (`0022300634`, ingested via `auto`).
+- Helper scripts beyond the core CLI: `find_game_id.py`, `make_player_reels.py` (one reel per player), `extend_clips.py` (lengthen clips), `publish_player_reels.py` (batch upload, video/Short by duration), `autocalibrate_poc.py`/`test_calib_luka.py`/`debug_calib_luka.py` (calibration diagnostics).
+- **Open thread — vertical Shorts.** `--vertical` (compose/make_player_reels) converts reels to 9:16 via `ffmpeg.to_vertical`, currently a **static center-crop**. It fills the frame but the ball drifts out on wing plays — **not good enough**. The planned fix is **dynamic reframing (auto-pan to follow the action)**; researching approaches before building (do NOT ship another quick crop hack). The earlier letterbox version was rejected too.
+- Test uploads to YouTube exist (Lakers per-player reels + several Shorts attempts, unlisted); the quota cap turned out higher than the documented ~6/day (a full 10-reel batch uploaded fine).
 - Work is on branch **`phase-6-signature-detection`** (not merged to main); GitHub remote renamed to `aidos-player-highlights` (local origin still uses the old URL via redirect).
 
-**Track B** (broadcast generalization / auto-calibration) is the remaining gate to arbitrary League Pass games — it needs sample scoreboard frames. See `docs/PHASES.md` and `docs/STRATEGY.md`.
+See `docs/PHASES.md` and `docs/STRATEGY.md`.

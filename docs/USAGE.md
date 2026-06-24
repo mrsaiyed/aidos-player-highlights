@@ -161,17 +161,25 @@ the longer clips.)
 - **Quota:** the documented default is ~6 uploads/day (10,000 units, 1,600/upload) — but in
   practice a full 10-reel batch uploaded fine, so quota is project-dependent; just run it and the
   batch reports any failures.
-- **For true Shorts, build vertical reels:** YouTube only files **vertical/square** videos as
-  Shorts. Add `--vertical` to `compose_reel.py` or `make_player_reels.py` to produce 9:16 reels
-  (the 16:9 play centered with a blurred fill top/bottom — nothing cropped), e.g.
-  `make_player_reels.py --team LAL --game 0052000121 --prefix lakers_shorts --vertical`. Then
-  `publish_player_reels.py --prefix lakers_shorts --short-under 90` uploads them tagged `#Shorts`.
+- **Vertical Shorts (`--vertical`) — preliminary.** Adding `--vertical` to `compose_reel.py` /
+  `make_player_reels.py` makes 9:16 reels (so YouTube files them as Shorts). **But the current
+  conversion is a static center-crop** — it fills the frame yet loses the ball on wing plays. A
+  proper **dynamic reframing** (auto-pan to follow the action) is planned; treat `--vertical` as a
+  placeholder until then.
 
-## 5. Adding more games
+## 5. Adding more games (any broadcast)
 
-Repeat Step 1 (`ingest_game.py`) for each game — each is clipped once into the library, and
-season/career reels then come from a single query spanning everything ingested.
+Each game is ingested once into the library; season/career reels then come from a single query
+spanning everything ingested. For a game from **any broadcast** (not just ESPN):
 
-> **Note:** ingest currently works on the calibrated **`espn`** broadcast profile. A game from a
-> different broadcast needs its scoreboard located first (a per-broadcast profile in
-> `scorebug_regions.py`) — that's Track B, the next build. See [STRATEGY.md](STRATEGY.md).
+```bash
+# 1. identify the game -> game ID (works for an untitled capture; team tricode or city)
+.venv\Scripts\python.exe scripts\find_game_id.py --team HOU --date 2025-01-15      # -> 00224.....  XXX @ HOU
+
+# 2. auto-calibrate the scoreboard for that broadcast, then ingest
+.venv\Scripts\python.exe scripts\ingest_game.py <game_id> <video_path> auto
+```
+
+`auto` discovers the scoreboard from the API score sequence (no hand-measuring) and tags the
+clips with the per-game profile. Use a named profile (e.g. `espn`) instead of `auto` only if one
+already exists for that exact broadcast.
