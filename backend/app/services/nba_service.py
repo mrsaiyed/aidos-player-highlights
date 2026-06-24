@@ -91,6 +91,39 @@ class NBAService:
         except Exception:
             return None
 
+    @staticmethod
+    def find_game_id(team: str, date: str) -> tuple[str | None, str | None]:
+        """Look up the NBA game_id for `team` on `date`.
+
+        `team` = tricode ('DAL') or city ('Dallas'); `date` = 'YYYY-MM-DD'. A team plays at most
+        once a day, so this is unambiguous. Returns (game_id, 'AWAY @ HOME') or (None, None).
+        Used to identify a downloaded/captured game so the pipeline can fetch its play-by-play.
+        """
+        try:
+            from nba_api.stats.endpoints import scoreboardv2
+            sb = scoreboardv2.ScoreboardV2(game_date=date)
+            gh = sb.game_header.get_data_frame()
+            ls = sb.line_score.get_data_frame()
+        except Exception:
+            return None, None
+
+        t_abbr = team.strip().upper()
+        t_city = team.strip().lower()
+
+        def ident(team_id):
+            rows = ls[ls["TEAM_ID"] == team_id]
+            if not len(rows):
+                return "", ""
+            r = rows.iloc[0]
+            return str(r.get("TEAM_ABBREVIATION", "")), str(r.get("TEAM_CITY_NAME", ""))
+
+        for _, g in gh.iterrows():
+            ha, hc = ident(g["HOME_TEAM_ID"])
+            aa, ac = ident(g["VISITOR_TEAM_ID"])
+            if t_abbr in (ha.upper(), aa.upper()) or (t_city and t_city in (hc.lower(), ac.lower())):
+                return str(g["GAME_ID"]), f"{aa} @ {ha}"
+        return None, None
+
     def load_mock_play_by_play(self) -> list[dict]:
         real_path = os.path.join(MOCK_DIR, "real_play_by_play.json")
         sample_path = os.path.join(MOCK_DIR, "play_by_play_sample.json")
