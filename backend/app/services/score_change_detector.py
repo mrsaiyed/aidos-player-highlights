@@ -99,16 +99,25 @@ def _white_mask(img, region: tuple[int, int, int, int]) -> np.ndarray:
 
 
 def _read_score(img, region: tuple[int, int, int, int]) -> int | None:
-    """OCR the integer score in a region. Returns None if unreadable."""
+    """OCR the integer score in a region. Returns None if unreadable.
+
+    Picks the most-confident plausible (0-199) numeric token rather than concatenating every
+    digit blob. Late-game scorebugs add bonus/timeout/foul digits next to the score, and gluing
+    them on produced garbage like "137" + "86" -> "13786", which then fails the signature match.
+    """
     x, y, w, h = region
     crop = img[y:y + h, x:x + w]
     big = cv2.resize(crop, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
     try:
-        out = _get_reader().readtext(big, detail=0, allowlist="0123456789")
+        out = _get_reader().readtext(big, detail=1, allowlist="0123456789")
     except Exception:
         return None
-    digits = "".join(ch for ch in "".join(out) if ch.isdigit())
-    return int(digits) if digits else None
+    best_val, best_conf = None, 0.0
+    for _box, text, conf in out:
+        d = "".join(ch for ch in text if ch.isdigit())
+        if d and int(d) <= 199 and conf > best_conf:
+            best_val, best_conf = int(d), conf
+    return best_val if best_conf >= 0.3 else None
 
 
 def _extract_window_frames(video_path, out_dir, start, duration):

@@ -76,7 +76,8 @@ class IngestService:
             row = self._upsert(db, nba_game_id, m, opponent, home, away, season, game_date)
             if cut_clips and m.video_time_seconds is not None:
                 start, end = clipper.calculate_clip_bounds(m.video_time_seconds, duration)
-                player_dir = os.path.join(lib_root, sanitize_player_name(m.player_name))
+                # group by team so players are separated by team in the library
+                player_dir = os.path.join(lib_root, m.team or "UNK", sanitize_player_name(m.player_name))
                 os.makedirs(player_dir, exist_ok=True)
                 clock_tag = (m.game_clock or "").replace(":", "m") + "s"
                 fname = f"a{m.action_id}_{clock_tag}_{m.event_subtype or 'shot'}.mp4"

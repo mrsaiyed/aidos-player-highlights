@@ -10,8 +10,8 @@ CLIP_TOTAL_SECONDS = 8
 # net at 439s, scorebug flip at 442s). We anchor on (flip - lag) = the net moment so the
 # ball lands CLIP_LEAD seconds into the clip.
 SCORE_FLIP_LAG_SECONDS = 3.0   # seconds the scorebug flip trails the ball through the net
-CLIP_LEAD_SECONDS = 5          # seconds before the net to start a clip
-CLIP_TRAIL_SECONDS = 3         # seconds after the net to end a clip
+CLIP_LEAD_SECONDS = 5          # seconds before the net to start a clip (ball lands at the 5s mark)
+CLIP_TRAIL_SECONDS = 5         # seconds after the net to end a clip -> 10s clips (5 before / 5 after)
 TRANSITION_MAX_LEAD_SECONDS = 10  # cap on transition lead (detected + stored; not applied to bounds yet)
 SHORT_MAX_DURATION_SECONDS = 120
 MINIMUM_IMPORTANCE_SCORE = 70
