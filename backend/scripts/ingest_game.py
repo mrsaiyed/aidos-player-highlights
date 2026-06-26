@@ -13,6 +13,12 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+try:  # accented player names (Dončić, Schröder) crash the default Windows console
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
